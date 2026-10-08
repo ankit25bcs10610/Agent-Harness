@@ -1,33 +1,59 @@
 import type { Tool } from "../types";
-import { promisify } from "node:util";
-import { exec } from "node:child_process";
 import z from "zod";
+import { ProcessExecutor } from "../../process/executor";
+
+const executor = new ProcessExecutor();
 
 export const bashTool: Tool<
-  { command: z.ZodString },
-  { stdout: string; stderr: string }
+  any,
+  {
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    signal: NodeJS.Signals | null;
+    durationMs: number;
+    truncated: boolean;
+    failure?: string;
+  }
 > = {
   name: "bash",
   description:
-    "Run a shell command in the project directory and return stdout and stderr. Use it for search (grep, find, ls), running tests, typecheck and other non-interactive commands. A non-zero exit returns an Error. Output is truncated if long, so narrow the command (head, grep, wc). No interactive commands. Pipes, chaining (&&, ;, |) and redirects need user approval each time, so prefer single simple commands.",
+    "Run a non-interactive process in the project directory. Simple commands use direct argument-based spawning. Set shell=true only when pipes, chaining, redirects, command substitution, or other shell syntax is required. Output, timeout, cancellation, and failure metadata are returned.",
   parameters: z.object({
     command: z.string().describe("single non-interactive shell command to run"),
+    shell: z
+      .boolean()
+      .optional()
+      .describe("explicitly enable shell interpretation"),
+    cwd: z.string().optional().describe("working directory for the process"),
+    timeoutMs: z.number().int().positive().optional(),
+    maxOutputChars: z.number().int().positive().optional(),
+    env: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("additional non-sensitive environment variables"),
   }),
-  getPermissionKey: ({ command }) => ({
+  getPermissionKey: (args: any) => ({
     capability: "execute",
-    target: command,
-    explanation: `Run shell command: ${command}`,
+    target: args.command,
+    explanation: `Run shell command: ${args.command}`,
     risk: "high",
   }),
-  execute: async ({ command }, signal) => {
-    try {
-      const execAsync = promisify(exec);
-      return await execAsync(command, { signal });
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Bash execution failed: ${error.message}`);
-      }
-      throw new Error("Bash execution failed");
+  execute: async (args: any, signal) => {
+    const result = await executor.run(
+      {
+        command: args.command,
+        shell: args.shell,
+        cwd: args.cwd,
+        timeoutMs: args.timeoutMs,
+        maxOutputChars: args.maxOutputChars,
+        env: (args.env ?? {}) as Record<string, string>,
+      },
+      signal,
+    );
+    if (result.failure) {
+      throw new Error(JSON.stringify(result));
     }
+    return result;
   },
 };

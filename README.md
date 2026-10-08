@@ -173,29 +173,30 @@ The loop can stop on provider stop/error/length/content-filter results, interrup
 
 ## Technical architecture
 
-| Path              | Responsibility                                                                         | Interaction                                                |
-| ----------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `src/index.tsx`   | Bootstrap, model context discovery, prompt generation, session loading, and UI render. | Connects configuration, prompt, session, provider, and UI. |
-| `src/config.ts`   | Loop, tool, UI, and local-state defaults.                                              | Supplies runtime settings.                                 |
-| `src/provider/`   | OpenRouter client, message/tool conversion, normalization, streaming, and usage.       | Called by the loop.                                        |
-| `src/loop/`       | Iteration, active history view, stop conditions, and dispatch.                         | Coordinates provider, context, and tools.                  |
-| `src/context/`    | System prompt, skills metadata, pruning, and compaction.                               | Prepares model context.                                    |
-| `src/tool/`       | Tool contract, registry, schemas, execution, and truncation.                           | Receives model calls.                                      |
-| `src/permission/` | Command/path policy, allowlists, and user decisions.                                   | Wraps sensitive tool execution.                            |
-| `src/session/`    | Session creation, atomic JSON writes, and latest-session loading.                      | Persists loop state.                                       |
-| `src/ui/`         | Ink components, input, Markdown, history, status, and approvals.                       | Starts runs and renders events.                            |
+| Path              | Responsibility                                                                                         | Interaction                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `src/index.tsx`   | Bootstrap, model context discovery, prompt generation, session loading, and UI render.                 | Connects configuration, prompt, session, provider, and UI. |
+| `src/config.ts`   | Loop, tool, UI, and local-state defaults.                                                              | Supplies runtime settings.                                 |
+| `src/provider/`   | OpenRouter client, message/tool conversion, normalization, streaming, and usage.                       | Called by the loop.                                        |
+| `src/loop/`       | Iteration, active history view, stop conditions, and dispatch.                                         | Coordinates provider, context, and tools.                  |
+| `src/context/`    | System prompt, skills metadata, pruning, and compaction.                                               | Prepares model context.                                    |
+| `src/tool/`       | Tool contract, registry, schemas, execution, and truncation.                                           | Receives model calls.                                      |
+| `src/process/`    | Controlled process execution, cancellation, output limits, environment filtering, and isolation hooks. | Used by `bash`.                                            |
+| `src/permission/` | Command/path policy, allowlists, and user decisions.                                                   | Wraps sensitive tool execution.                            |
+| `src/session/`    | Session creation, atomic JSON writes, and latest-session loading.                                      | Persists loop state.                                       |
+| `src/ui/`         | Ink components, input, Markdown, history, status, and approvals.                                       | Starts runs and renders events.                            |
 
 Only OpenRouter is implemented as a provider today. The provider types and normalization boundary are the extension point for a future adapter. There is no generic plugin system yet.
 
 ## Tool system
 
-| Tool          | Arguments                          | Behavior                                                                              | Permission model                                                       |
-| ------------- | ---------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `bash`        | `command: string`                  | Runs a non-interactive command with Node `child_process.exec`; returns stdout/stderr. | Command checks; unsafe syntax and high-risk patterns require approval. |
-| `read_file`   | `path`, optional `offset`, `limit` | Reads bounded text lines; default limit is 2,000.                                     | Capability `read`; hidden paths ask and sensitive paths deny.          |
-| `write_file`  | `path`, `content`                  | Creates parent directories and a new file; refuses overwrite.                         | Capability `create`; canonical workspace path required.                |
-| `str_replace` | `path`, `oldString`, `newString`   | Replaces exactly one occurrence; fails on zero or multiple matches.                   | Capability `modify`; canonical path and symlink re-check.              |
-| `load_skill`  | `skillName: string`                | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.            | Local skill capability has no external access.                         |
+| Tool          | Arguments                                         | Behavior                                                                               | Permission model                                                                |
+| ------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `bash`        | `command`, optional `shell`, `cwd`, limits, `env` | Runs a controlled non-interactive process with structured output and failure metadata. | Central execute authorization; destructive/high-risk commands require approval. |
+| `read_file`   | `path`, optional `offset`, `limit`                | Reads bounded text lines; default limit is 2,000.                                      | Capability `read`; hidden paths ask and sensitive paths deny.                   |
+| `write_file`  | `path`, `content`                                 | Creates parent directories and a new file; refuses overwrite.                          | Capability `create`; canonical workspace path required.                         |
+| `str_replace` | `path`, `oldString`, `newString`                  | Replaces exactly one occurrence; fails on zero or multiple matches.                    | Capability `modify`; canonical path and symlink re-check.                       |
+| `load_skill`  | `skillName: string`                               | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.             | Local skill capability has no external access.                                  |
 
 Arguments are parsed as JSON and validated with Zod. Validation and execution failures return error text to the model. Tool result fields are truncated by `TOOLS.maxOutputChars`.
 
@@ -224,7 +225,17 @@ Command matching rejects chaining, pipes, redirects, command substitution, and s
 
 File authorization resolves existing symlinks and the nearest existing ancestor for new paths before checking workspace containment. Hidden paths ask by default; common credential paths such as `.env`, `.ssh`, private keys, and certificate files are denied by default. Tools re-check file targets immediately before access or modification to reduce path-race exposure.
 
-This is not an OS-level sandbox. Approved `child_process.exec` commands can affect the machine and can access resources outside the workspace through the shell. Filesystem checks reduce tool-level escapes but cannot make arbitrary shell execution safe. Project content may contain prompt injection; model instructions are not a security boundary.
+### Process-execution guarantees and limitations
+
+`src/process/executor.ts` is a controlled process runner, not a true sandbox:
+
+- Simple commands are split into an executable and arguments and use direct spawning without shell interpretation.
+- Shell interpretation is opt-in with `shell: true`; complex syntax is rejected when shell mode is omitted.
+- The runner supports configurable workspace-relative cwd, timeout, abort-signal cancellation, process-tree termination on macOS/Linux, bounded output, exit metadata, and filtered environment variables.
+- Inherited and requested environment keys containing common secret markers such as `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `AUTH`, or `COOKIE` are filtered from child processes.
+- Requested isolation backends are represented by `IsolationBackend`. If a requested backend is not registered, execution fails closed; no container or OS sandbox is silently enabled.
+
+The current implementation does not provide OS-level syscall isolation, filesystem namespaces, network isolation, resource quotas beyond timeout/output bounds, or a race-proof `openat`/descriptor-based policy boundary. An approved command can still modify the machine, access network resources, invoke other programs, or bypass workspace intent. Process-tree termination is best-effort across platforms, especially for grandchildren that detach themselves. Project content may contain prompt injection; model instructions are not a security boundary.
 
 ## Context engineering
 
@@ -383,7 +394,7 @@ Provider additions should preserve the internal types and normalization boundary
 ## Security considerations
 
 - Keep `OPENROUTER_API_KEY` in the environment or ignored `.env`; never commit it.
-- Shell execution uses `child_process.exec`, not an OS sandbox.
+- Shell execution uses the controlled process executor and is not an OS sandbox.
 - Approved commands may affect files, processes, credentials, or machine state.
 - Local session JSON can contain sensitive source and conversation content.
 - Review model-generated edits, commands, dependency changes, and deployment instructions.

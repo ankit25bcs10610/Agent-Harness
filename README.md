@@ -112,6 +112,12 @@ agent: Token validation occurs in src/auth/middleware.ts:42...
 
 This output is illustrative, not a captured transcript. Approval prompts show the requested operation and offer keyboard choices. Arrow keys select, Enter confirms, Escape denies, and Ctrl-C interrupts a run or exits when idle.
 
+## Evaluation and benchmarking
+
+Chiku includes a versioned, fixture-based evaluation foundation for measuring real agent runs with trusted graders, redacted traces, integrity checks, token/usage accounting, atomic result storage, baseline comparisons, and regression gates. Missing provider usage and cost are recorded as unknown rather than fabricated. Required isolation fails closed when no OS/container backend is available.
+
+See [docs/EVALUATION.md](docs/EVALUATION.md) for the execution model, safety guarantees, terminal inspection commands, and the exact remaining limitations. The [implementation tracker](docs/EVALUATION_TRACKER.md) distinguishes tested behavior from code that still needs broader integration. No benchmark score is claimed until a reproducible task run has produced it.
+
 ## High-level system architecture
 
 ```mermaid

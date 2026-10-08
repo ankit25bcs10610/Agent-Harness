@@ -29,6 +29,12 @@ import {
   createDefaultAgentRegistry,
   MultiAgentCoordinator,
 } from "../multiagent";
+import {
+  EvaluationEngine,
+  compareResults,
+  listExperiments,
+  proposeImprovements,
+} from "../evaluation";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -81,6 +87,10 @@ const COMMANDS: Record<string, string> = {
   "/agent": "Inspect a registered agent or its current executions.",
   "/team": "Inspect the multi-agent task graph and execution state.",
   "/parallel": "Inspect or change the bounded parallel-agent limit.",
+  "/eval": "Inspect evaluation runs and benchmark results.",
+  "/benchmark": "Inspect registered benchmark suites.",
+  "/experiments": "Inspect persisted evaluation experiments.",
+  "/improve": "Inspect evidence-backed improvement candidates.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
@@ -150,6 +160,7 @@ export function App({ systemPrompt, session, config }: Props) {
       maxActiveAgents: 2,
     }),
   );
+  const evaluationRef = useRef(new EvaluationEngine());
 
   function push(kind: "user" | "assistant" | "error", text: string) {
     const id = nextId++;
@@ -330,6 +341,86 @@ export function App({ systemPrompt, session, config }: Props) {
           throw new Error(
             "supported commands: /agents, /agent list|info|status, /team status|tasks|graph, /parallel status|limit",
           );
+        }
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
+    if (
+      localCommand === "/eval" ||
+      localCommand === "/benchmark" ||
+      localCommand === "/experiments" ||
+      localCommand === "/improve"
+    ) {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const [operation = "list", value, secondValue] = remainder.split(
+          /\s+/,
+          3,
+        );
+        const engine = evaluationRef.current;
+        await engine.hydrate();
+        if (localCommand === "/benchmark") {
+          push("assistant", JSON.stringify(engine.benchmarks.list(), null, 2));
+        } else if (localCommand === "/experiments") {
+          push("assistant", JSON.stringify(await listExperiments(), null, 2));
+        } else if (localCommand === "/improve") {
+          const results = engine.listResults();
+          push(
+            "assistant",
+            JSON.stringify(proposeImprovements(results), null, 2),
+          );
+        } else if (operation === "list") {
+          push("assistant", JSON.stringify(engine.listResults(), null, 2));
+        } else if (operation === "security") {
+          push(
+            "assistant",
+            JSON.stringify(
+              engine.listResults().map((result) => ({
+                evaluationId: result.evaluationId,
+                taskId: result.taskId,
+                status: result.status,
+                safety: result.metrics.safety,
+                integrity: result.integrity,
+              })),
+              null,
+              2,
+            ),
+          );
+        } else if (operation === "compare") {
+          if (!value || !secondValue)
+            throw new Error("usage: /eval compare <before-id> <after-id>");
+          push(
+            "assistant",
+            JSON.stringify(
+              compareResults(
+                [engine.result(value)],
+                [engine.result(secondValue)],
+              ),
+              null,
+              2,
+            ),
+          );
+        } else {
+          if (!value)
+            throw new Error(`usage: /eval ${operation} <evaluation-id>`);
+          const result = engine.result(value);
+          if (operation === "trace")
+            push("assistant", JSON.stringify(result.trace, null, 2));
+          else if (operation === "failures")
+            push(
+              "assistant",
+              JSON.stringify(
+                result.grades.filter((grade) => grade.outcome !== "PASS"),
+                null,
+                2,
+              ),
+            );
+          else push("assistant", JSON.stringify(result, null, 2));
         }
       } catch (error) {
         push("error", error instanceof Error ? error.message : String(error));

@@ -1,106 +1,63 @@
 # Chiku
 
-Chiku is a terminal-first AI coding agent built with TypeScript, React, and Ink. It connects an OpenRouter model to a controlled set of project tools so the agent can inspect a repository, plan changes, edit files, run commands, and present results in an interactive terminal session.
+<div align="center">
 
-The project is designed as a small, understandable agent runtime: provider communication, the agent loop, context management, tool execution, permissions, persistence, and presentation are separated into focused modules.
+### An Extensible Terminal-Native AI Coding Agent
 
-## Highlights
+Model reasoning, structured developer tools, permission-aware execution, context management, and persistent development sessions in an interactive terminal.
 
-- Interactive terminal UI built with React and [Ink](https://github.com/vadimdemedes/ink)
-- OpenRouter model support with streaming and non-streaming completion paths
-- Tool calling for shell commands, file reads, file creation, exact text replacement, and skills
-- Permission checks for commands, paths, and edits before sensitive tool execution
-- Context pruning and model-assisted compaction for long sessions
-- Automatic model context-window discovery with a safe configured fallback
-- Markdown rendering for assistant responses
-- Atomic JSON session persistence and latest-session resume
-- Type-safe tool schemas validated with [Zod](https://zod.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/runtime-Bun-000000?logo=bun&logoColor=white)](https://bun.sh/)
+[![OpenRouter](https://img.shields.io/badge/provider-OpenRouter-5B4BDB)](https://openrouter.ai/)
+[![React + Ink](https://img.shields.io/badge/UI-React%20%2B%20Ink-61DAFB?logo=react&logoColor=20232A)](https://github.com/vadimdemedes/ink)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Architecture
+[Quick start](#quick-start) · [Architecture](#high-level-system-architecture) · [Tools](#tool-system) · [Security](#security-considerations)
 
-```mermaid
-flowchart TD
-    CLI[CLI entrypoint\nsrc/index.tsx] --> PROMPT[System prompt\ncontext/system_prompt.ts]
-    CLI --> CONFIG[Runtime configuration\nsrc/config.ts]
-    CLI --> SESSION[Session store\nsession/store.ts]
-    CLI --> UI[Ink UI\nui/App.tsx]
-    UI --> LOOP[Agent loop\nloop/loop.ts]
-    LOOP --> CONTEXT[Prune + compact\ncontext/]
-    LOOP --> PROVIDER[Provider adapter\nprovider/]
-    LOOP --> DISPATCH[Tool dispatch\nloop/dispatch.ts]
-    DISPATCH --> PERMISSIONS[Permission engine\npermission/]
-    DISPATCH --> TOOLS[Tool registry\ntool/]
-    PROVIDER --> OPENROUTER[OpenRouter API]
-    TOOLS --> PROJECT[Project files + shell]
-    LOOP --> SESSION
-    UI --> LOOP
-```
+</div>
 
-### Runtime flow
+## Project overview
 
-1. `src/index.tsx` loads configuration, discovers the selected model’s context window, generates the system prompt, and creates or resumes a session.
-2. `ui/App.tsx` collects user input and renders assistant, tool, error, status, and permission events.
-3. `loop/runLoop` builds the active message view and repeatedly requests a model completion until the model stops, the user interrupts, or a configured budget is reached.
-4. When the model returns tool calls, `loop/dispatch.ts` routes them through the registry and records the resulting tool messages.
-5. Before a sensitive command or edit runs, the permission layer checks its command/path policy and asks the user when required.
-6. When the context approaches configured thresholds, older content is pruned and the transcript can be compacted into a summary before the next model request.
-7. The resulting state is persisted as JSON so the latest session can be resumed later.
+Chiku is a terminal-native AI coding agent and harness. It is more than an LLM API wrapper: it owns the lifecycle around a model request, including prompt construction, context shaping, streamed responses, tool-call dispatch, argument validation, permission decisions, interruption handling, and session persistence.
 
-## Module guide
+The current runtime connects to OpenRouter, renders through React and Ink, and exposes a small set of project tools. It can inspect files, create files, make exact replacements, run non-interactive shell commands, and load local Markdown skills. Sensitive operations pass through human approval.
 
-| Module | Responsibility |
-| --- | --- |
-| `src/index.tsx` | Application bootstrap, model discovery, prompt generation, and resume handling |
-| `src/config.ts` | Loop, tool, UI, and local-state defaults |
-| `src/provider/` | OpenRouter client, request conversion, response normalization, streaming, and usage stats |
-| `src/loop/` | Agent iteration, stop conditions, tool-call dispatch, and loop events |
-| `src/context/` | System prompt generation, context pruning, transcript compaction, and skills metadata |
-| `src/tool/` | Tool contracts, registry, argument validation, execution, and output truncation |
-| `src/permission/` | Command safety rules, path containment checks, allowlists, and user decisions |
-| `src/session/` | Session lifecycle, JSON serialization, atomic writes, and latest-session loading |
-| `src/ui/` | Ink components, Markdown rendering, history, status display, and permission prompts |
-| `docs/` | Provider and tool implementation notes |
+## Why Chiku?
 
-## Tools
+- **Modular runtime:** provider communication, loop control, context engineering, tools, permissions, persistence, and presentation are separated.
+- **Structured tools:** Zod-validated arguments produce predictable tool calls and results.
+- **Terminal-native interaction:** streamed text, Markdown, tool activity, status, and approval prompts work in an interactive terminal.
+- **Human-in-the-loop execution:** commands and edits can require a user decision with session-scoped allow rules.
+- **Context awareness:** active model context can be pruned and compacted near configured thresholds.
+- **Session continuity:** loop state is serialized locally and can be resumed.
+- **Extension-oriented organization:** new tools can implement the existing `Tool` contract and registry pattern.
 
-The agent currently exposes the following tools:
+## Core features
 
-- `bash` — runs a non-interactive shell command in the project context. Chained commands, redirects, and high-risk operations require approval.
-- `read_file` — reads a bounded range of a text file and reports whether the result was truncated.
-- `write_file` — creates a new file and refuses to overwrite an existing file.
-- `str_replace` — replaces one exact, unique text span in an existing file.
-- `load_skill` — loads a named project skill from `.chiku/skills/` without allowing path traversal.
+| Capability             | Description                                                                    | Implementation                                 |
+| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Agent loop             | Iterates model and tool calls until a stop condition, interruption, or budget. | `src/loop/loop.ts`                             |
+| Streaming              | Streams assistant text and reasoning updates.                                  | `src/provider/complete.ts`, `src/ui/App.tsx`   |
+| Tool calling           | Dispatches validated and permissioned model calls.                             | `src/loop/dispatch.ts`, `src/tool/registry.ts` |
+| Five built-in tools    | `bash`, `read_file`, `write_file`, `str_replace`, `load_skill`.                | `src/tool/tools/`                              |
+| OpenRouter integration | SDK client, normalization, streaming, usage, and model discovery.              | `src/provider/`                                |
+| Context engineering    | Pruning and model-assisted compaction.                                         | `src/context/`                                 |
+| Sessions               | Atomic local JSON persistence and latest-session resume.                       | `src/session/`                                 |
+| Skills                 | Markdown skill discovery and on-demand loading.                                | `.chiku/skills/`                               |
+| Permissions            | Command, path, and edit checks with approval prompts.                          | `src/permission/`                              |
+| Terminal UI            | Ink components, Markdown, status, history, and prompts.                        | `src/ui/`                                      |
+| Workflow shortcuts     | Slash commands for common developer workflows.                                 | `src/ui/App.tsx`                               |
+| Budgets                | Iteration and aggregate loop-token limits.                                     | `src/config.ts`                                |
 
-Tool arguments are defined with Zod schemas, normalized into the provider’s tool format, and returned to the loop as typed tool messages.
+## Quick start
 
-## Permission model
+### Requirements
 
-Chiku treats tool execution as a policy decision rather than an unconditional capability.
-
-- Read-only tools do not require an interactive permission decision.
-- Project edits are allowed only inside the project root and otherwise require explicit approval.
-- Shell commands are checked for chaining, pipes, redirects, command substitution, and other high-risk patterns.
-- Destructive commands such as recursive removal, hard resets, forced pushes, and forced cleaning always require approval.
-- Users can deny a request, allow it once, or add an exact/prefix rule for future requests in the session.
-
-The permission layer is a safety boundary, not a replacement for reviewing model-generated commands. Review prompts and command output before allowing changes.
-
-## Context management
-
-The loop maintains both a complete message history and a smaller active view sent to the model.
-
-- **Pruning** removes eligible tool-heavy content when the prompt reaches `pruneRatio` of the available context window.
-- **Compaction** asks the configured compaction model to summarize older transcript content when the prompt reaches `compactionRatio`.
-- **Budgets** stop the loop after the configured maximum iterations or token budget.
-- **Interrupt handling** records an interruption marker so a resumed turn is not misinterpreted by the model.
-
-## Requirements
-
+- An interactive terminal
 - [Bun](https://bun.sh/) 1.x
-- An [OpenRouter](https://openrouter.ai/) API key
-- A terminal capable of rendering ANSI output
+- An OpenRouter API key with sufficient credit and model access
 
-## Installation
+### Install
 
 ```bash
 git clone https://github.com/ankit25bcs10610/Agent-Harness.git
@@ -108,122 +65,365 @@ cd Agent-Harness
 bun install
 ```
 
-Configure the provider credential in your environment:
+Configure the credential without committing it:
 
 ```bash
-export OPENROUTER_API_KEY="your-api-key"
+export OPENROUTER_API_KEY="your-openrouter-api-key"
 ```
 
-You may place the same variable in a local `.env` file. Do not commit secrets; `.env` files are ignored by Git.
+You may use an ignored local `.env` file:
 
-## Usage
+```dotenv
+OPENROUTER_API_KEY=your-openrouter-api-key
+```
 
-Start an interactive session:
+Start Chiku from the project directory it should work on:
 
 ```bash
 bun run dev
 ```
 
-Resume the most recently saved session:
+Resume the newest compatible saved session:
 
 ```bash
 bun run dev -- --continue
 ```
 
-Run the entry point directly when needed:
+OpenRouter is an external, potentially billable service. Requests are subject to provider availability, limits, and data-handling policies.
 
-```bash
-bun src/index.tsx
+## Terminal experience
+
+Type a natural-language task at the `>` prompt and press Enter. Chiku renders streamed assistant text, a compact reasoning tail, active tool calls, Markdown, context usage, session title, and status.
+
+Illustrative session:
+
+```text
+> Inspect the authentication flow and explain where token validation happens.
+
+  read_file { path: "src/auth/server.ts" }        ok
+  read_file { path: "src/auth/middleware.ts" }    ok
+
+agent: Token validation occurs in src/auth/middleware.ts:42...
 ```
 
-Sessions are stored locally as JSON under `.chiku/sessions/`.
+This output is illustrative, not a captured transcript. Approval prompts show the requested operation and offer keyboard choices. Arrow keys select, Enter confirms, Escape denies, and Ctrl-C interrupts a run or exits when idle.
 
-## Configuration
+## High-level system architecture
 
-Runtime defaults live in [`src/config.ts`](src/config.ts):
+```mermaid
+flowchart LR
+    U[User input] --> UI[React / Ink terminal UI]
+    UI --> LOOP[Agent execution loop]
+    LOOP --> CM[Context manager\nactive view, pruning, compaction]
+    LOOP --> PA[Provider adapter]
+    PA --> OR[OpenRouter API]
+    OR --> PA
+    PA --> LOOP
+    LOOP --> DISPATCH[Tool-call dispatch]
+    DISPATCH --> REG[Tool registry]
+    REG --> ZOD[Zod argument validation]
+    ZOD --> PERM[Permission evaluation]
+    PERM --> EXEC[Tool execution]
+    EXEC --> RESULT[Tool result]
+    RESULT --> LOOP
+    LOOP --> UI
+    LOOP <--> STORE[Session store\nlocal JSON]
+    SKILLS[.chiku/skills/] --> CM
+```
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `loopModel` | `anthropic/claude-haiku-5.5` | Primary coding-agent model |
-| `compactionModel` | `openrouter/free` | Model used to summarize older context |
-| `maxIterations` | `20` | Maximum model/tool iterations per turn |
-| `maxTokens` | `200000` | Total token budget for a loop |
-| `contextWindow` | `128000` | Fallback context size when provider discovery fails |
-| `pruneRatio` | `0.5` | Prompt utilization threshold for pruning |
-| `compactionRatio` | `0.9` | Prompt utilization threshold for compaction |
+## Agent execution lifecycle
 
-The provider attempts to discover the selected model’s current context length from OpenRouter and falls back to `contextWindow` when the request is unavailable or times out.
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as Ink UI
+    participant Loop as Agent loop
+    participant Context as Context manager
+    participant Provider as OpenRouter
+    participant Permission as Permission engine
+    participant Tool as Tool executor
+    participant Store as Session store
 
-## Development commands
+    User->>UI: Submit task
+    UI->>Loop: Start run
+    Loop->>Context: Prepare active message view
+    Context-->>Loop: Pruned or compacted view
+    Loop->>Provider: Messages and tool specifications
+    Provider-->>Loop: Streamed content or tool calls
+    alt Tool call
+        Loop->>Tool: Dispatch call
+        Tool->>Tool: Validate with Zod
+        Tool->>Permission: Evaluate policy
+        Permission->>UI: Ask when required
+        UI-->>Permission: Allow or deny
+        Permission-->>Tool: Decision
+        Tool-->>Loop: Result or error
+        Loop->>Provider: Continue with result
+    else Final response
+        Loop-->>UI: Render response
+    end
+    Loop->>Store: Persist completed state
+```
 
-```bash
-bun run dev          # Start the interactive agent
-bun run watch        # Start with Bun watch mode
-bun run typecheck    # Run the TypeScript compiler without emitting files
-bun run format       # Format source files with Prettier
-bun run format:check # Verify formatting
+The loop can stop on provider stop/error/length/content-filter results, interruption, maximum iterations, or aggregate token budget. An interruption appends a marker for future continuation.
+
+## Technical architecture
+
+| Path              | Responsibility                                                                         | Interaction                                                |
+| ----------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `src/index.tsx`   | Bootstrap, model context discovery, prompt generation, session loading, and UI render. | Connects configuration, prompt, session, provider, and UI. |
+| `src/config.ts`   | Loop, tool, UI, and local-state defaults.                                              | Supplies runtime settings.                                 |
+| `src/provider/`   | OpenRouter client, message/tool conversion, normalization, streaming, and usage.       | Called by the loop.                                        |
+| `src/loop/`       | Iteration, active history view, stop conditions, and dispatch.                         | Coordinates provider, context, and tools.                  |
+| `src/context/`    | System prompt, skills metadata, pruning, and compaction.                               | Prepares model context.                                    |
+| `src/tool/`       | Tool contract, registry, schemas, execution, and truncation.                           | Receives model calls.                                      |
+| `src/permission/` | Command/path policy, allowlists, and user decisions.                                   | Wraps sensitive tool execution.                            |
+| `src/session/`    | Session creation, atomic JSON writes, and latest-session loading.                      | Persists loop state.                                       |
+| `src/ui/`         | Ink components, input, Markdown, history, status, and approvals.                       | Starts runs and renders events.                            |
+
+Only OpenRouter is implemented as a provider today. The provider types and normalization boundary are the extension point for a future adapter. There is no generic plugin system yet.
+
+## Tool system
+
+| Tool          | Arguments                          | Behavior                                                                              | Permission model                                                       |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `bash`        | `command: string`                  | Runs a non-interactive command with Node `child_process.exec`; returns stdout/stderr. | Command checks; unsafe syntax and high-risk patterns require approval. |
+| `read_file`   | `path`, optional `offset`, `limit` | Reads bounded text lines; default limit is 2,000.                                     | No interactive permission check currently.                             |
+| `write_file`  | `path`, `content`                  | Creates parent directories and a new file; refuses overwrite.                         | Uses a `path` permission key.                                          |
+| `str_replace` | `path`, `oldString`, `newString`   | Replaces exactly one occurrence; fails on zero or multiple matches.                   | Uses an `edit` key and project-root checks.                            |
+| `load_skill`  | `skillName: string`                | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.            | No interactive permission check currently.                             |
+
+Arguments are parsed as JSON and validated with Zod. Validation and execution failures return error text to the model. Tool result fields are truncated by `TOOLS.maxOutputChars`.
+
+## Permission and safety architecture
+
+```mermaid
+flowchart TD
+    CALL[Tool call] --> KEY{Permission key?}
+    KEY -->|none| RUN[Execute]
+    KEY -->|command| CMD[Command pattern checks]
+    KEY -->|path or edit| PATH[Resolve path and check root]
+    CMD --> DECIDE{Allowed?}
+    PATH --> DECIDE
+    DECIDE -->|yes| RUN
+    DECIDE -->|no| ASK[Prompt user]
+    ASK --> CHOICE{Decision}
+    CHOICE -->|deny| DENY[Return denied result]
+    CHOICE -->|allow once| RUN
+    CHOICE -->|allow exact or prefix| RULE[Add session rule] --> RUN
+```
+
+Command matching rejects chaining, pipes, redirects, command substitution, and selected destructive patterns from automatic approval. Always-ask patterns include recursive removal, forced pushes, hard resets, forced cleaning, and force-deleting branches. Exact and prefix rules live only in memory for the current session.
+
+This is not an OS-level sandbox. Approved `child_process.exec` commands can affect the machine. Direct reads are not universally gated, and write/edit tools use different permission keys. Project content may contain prompt injection; model instructions are not a security boundary.
+
+## Context engineering
+
+The loop keeps complete history for state and a smaller active message view for provider requests. At each iteration, it checks prompt tokens:
+
+```mermaid
+flowchart TD
+    START[Before request] --> PRUNE{Prompt >= 50%?}
+    PRUNE -->|yes| P[Prune eligible content\nallowance 10%]
+    PRUNE -->|no| COMPACT
+    P --> COMPACT{Prompt >= 90%?}
+    COMPACT -->|yes| SUM[Ask compaction model for summary]
+    COMPACT -->|no| REQUEST[Send active view]
+    SUM --> REBUILD[Rebuild summary plus newer messages] --> REQUEST
+```
+
+Pruning uses `pruneRatio: 0.5`, `contextWindow: 128000`, and `maxPruneAllowanceRatio: 0.1`. Compaction uses `compactionRatio: 0.9`, `compactionModel: openrouter/free`, and `transcriptCapChars: 2000`. Context-window discovery uses OpenRouter’s public model list and falls back to 128,000 on failure. Compaction is lossy.
+
+The loop has `maxIterations: 20` and `maxTokens: 200000`. Provider requests currently cap completion output at 4,000 tokens to fit the configured development key limit.
+
+## Provider architecture
+
+`src/provider/client.ts` loads `.env` with dotenv and requires `OPENROUTER_API_KEY`. `complete` and `completeStream` construct SDK chat requests, normalize internal messages, convert tool schemas, and pass an abort signal.
+
+`normalize.ts` converts provider choices to internal messages, normalizes finish reasons and usage statistics, and reconstructs streamed content and tool-call fragments. `model.ts` discovers the selected model’s context length from OpenRouter and uses the configured fallback after a failure or timeout.
+
+| Role         | Current model     |
+| ------------ | ----------------- |
+| Primary loop | `openai/gpt-4o`   |
+| Compaction   | `openrouter/free` |
+
+Only the OpenRouter adapter exists today.
+
+## Session persistence
+
+New sessions receive an ISO timestamp ID and a title derived from the first request. State is serialized under `.chiku/sessions/`. Writes use a temporary file followed by rename to reduce partial-file risk. `--continue` selects the newest compatible JSON session; missing, corrupt, or incompatible state causes a fresh session.
+
+Local sessions may contain source code, prompts, tool results, and model responses. Protect the `.chiku/` directory.
+
+## Local skills
+
+Skills are Markdown files under `.chiku/skills/` with `name` and `description` frontmatter. The system prompt lists valid skills and `load_skill` loads a body by filename stem. Names containing `.\/` are rejected.
+
+```markdown
+---
+name: test2
+description: this is to test skills
+---
+
+# Skill body
+
+Describe specialized guidance here.
 ```
 
 ## Slash commands
 
-The terminal UI includes shortcuts for common workflows. Type one at the `>` prompt and press Enter:
+Shortcuts in `src/ui/App.tsx` expand into agent instructions; they do not bypass the normal model, tool, or permission path.
 
-```text
-/help       Show available shortcuts
-/status     Summarize Git status
-/diff       Explain current changes
-/tree       Show the project tree
-/typecheck  Run TypeScript validation
-/test       Find and run tests
-/lint       Run linting
-/format     Check and format the project
-/build      Run the build
-/audit      Audit dependencies
-/review     Review changes without editing
-/start      Start the development server
-/stop       Stop the project server
-/commit     Review and prepare a commit
-/deploy     Explain deployment and request approval before deploying
-```
+| Command      | Intent                                                    |
+| ------------ | --------------------------------------------------------- |
+| `/help`      | List shortcuts.                                           |
+| `/status`    | Summarize Git status.                                     |
+| `/diff`      | Explain the current diff.                                 |
+| `/tree`      | Show a concise project tree.                              |
+| `/typecheck` | Run TypeScript validation.                                |
+| `/test`      | Find and run tests.                                       |
+| `/lint`      | Find and run linting.                                     |
+| `/format`    | Check and format when needed.                             |
+| `/build`     | Find and run a build.                                     |
+| `/audit`     | Audit dependencies.                                       |
+| `/review`    | Review changes without editing.                           |
+| `/start`     | Find and start a development server.                      |
+| `/stop`      | Find and stop the project server.                         |
+| `/commit`    | Review and prepare a commit after approval.               |
+| `/deploy`    | Explain deployment and require approval before deploying. |
 
-These are guided prompts, not permission bypasses. Chiku still asks for approval before edits, risky shell commands, commits, server control, or deployment.
+External command availability depends on the target repository.
 
-There is currently no automated test script configured in `package.json`. Type checking and formatting are the available repository-level validation commands.
+## Configuration
 
-## Project layout
+| Setting                      |           Default | Purpose                      |
+| ---------------------------- | ----------------: | ---------------------------- |
+| `loopModel`                  |   `openai/gpt-4o` | Primary model.               |
+| `compactionModel`            | `openrouter/free` | Summary model.               |
+| `maxIterations`              |              `20` | Maximum loop iterations.     |
+| `maxTokens`                  |          `200000` | Aggregate loop token budget. |
+| `contextWindow`              |          `128000` | Fallback context size.       |
+| `pruneRatio`                 |             `0.5` | Pruning threshold.           |
+| `compactionRatio`            |             `0.9` | Compaction threshold.        |
+| `maxPruneAllowanceRatio`     |             `0.1` | Prune allowance.             |
+| `transcriptCapChars`         |            `2000` | Compaction transcript cap.   |
+| `TOOLS.maxOutputChars`       |            `2000` | Tool-result string cap.      |
+| `TOOLS.readFileDefaultLimit` |            `2000` | Default `read_file` lines.   |
+| `UI.titleMaxChars`           |              `50` | Session title cap.           |
+| `UI.reasoningTailChars`      |             `300` | Live reasoning tail.         |
+| `UI.toolSummaryChars`        |              `60` | Tool summary length.         |
+| `UI.resizeDebounceMs`        |             `100` | Resize redraw debounce.      |
+
+## Repository structure
 
 ```text
 .
-├── assets/             Project assets
-├── docs/               Provider and tool notes
+├── .chiku/skills/       Local Markdown skills
+├── assets/arch.png      Existing architecture sketch
+├── docs/                Provider and tool notes
 ├── src/
-│   ├── context/        Prompt, pruning, and compaction
-│   ├── loop/           Agent loop and dispatch
-│   ├── permission/     Command and path safety checks
-│   ├── provider/       OpenRouter integration
-│   ├── session/        Persistence and resume support
-│   ├── tool/           Registry and tool implementations
-│   ├── ui/             Ink terminal interface
-│   └── util/           Shared helpers
-├── package.json        Scripts and dependencies
-├── tsconfig.json       TypeScript configuration
-└── bun.lock            Reproducible Bun dependency lockfile
+│   ├── context/         Prompt, pruning, and compaction
+│   ├── loop/            Agent loop and dispatch
+│   ├── permission/      Safety checks and approval
+│   ├── provider/        OpenRouter adapter
+│   ├── session/         Persistence and resume
+│   ├── tool/            Registry and tools
+│   ├── ui/              Ink terminal UI
+│   └── util/             Shared helpers
+├── LICENSE
+├── README.md
+├── TODO.md
+├── bun.lock
+├── package.json
+└── tsconfig.json
 ```
 
-## Security and operational notes
+## Developer workflow
 
-- Never commit `OPENROUTER_API_KEY` or other credentials.
-- Treat model-generated shell commands and file edits as untrusted until reviewed.
-- Keep permission prompts enabled for destructive commands and edits outside the project root.
-- Session JSON may contain conversation content; protect the local `.chiku/` directory appropriately.
-- The OpenRouter API and selected model determine external data handling, cost, rate limits, and availability.
+```bash
+bun run dev          # Interactive agent
+bun run watch        # Bun watch mode
+bun run typecheck    # TypeScript validation
+bun run format       # Format files
+bun run format:check # Verify formatting
+```
 
-## License
+The `test` script is currently a failing placeholder. No automated test framework, linter, CI workflow, build pipeline, release process, or coverage report is configured.
 
-This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for the complete license text.
+## Extending the harness
 
-## Author
+To add a tool:
 
-**Ankit Pandey**
+1. Create a module under `src/tool/tools/`.
+2. Define a `Tool` object with a Zod parameter object.
+3. Implement `execute(args, signal)` with a serializable result.
+4. Return a permission key for commands, paths, or edits when needed.
+5. Register it in `src/tool/registry.ts`.
+6. Run `bun run typecheck` and exercise it in a controlled prompt.
 
-`ankit.25bcs10610@sst.scaler.com`
+Provider additions should preserve the internal types and normalization boundary in `src/provider/types.ts` and `src/provider/normalize.ts`. A generic plugin API is not implemented.
+
+## Example use cases
+
+- “Show the source tree and explain the request lifecycle.”
+- “Read the authentication files and identify the validation boundary; do not edit.”
+- “Run `/typecheck`, explain the first error, and propose a focused fix.”
+- “Run `/diff` and flag security or regression risks.”
+- “Launch with `bun run dev -- --continue` to resume work.”
+
+## Security considerations
+
+- Keep `OPENROUTER_API_KEY` in the environment or ignored `.env`; never commit it.
+- Shell execution uses `child_process.exec`, not an OS sandbox.
+- Approved commands may affect files, processes, credentials, or machine state.
+- Local session JSON can contain sensitive source and conversation content.
+- Review model-generated edits, commands, dependency changes, and deployment instructions.
+- Repository content can contain prompt injection.
+- OpenRouter controls external request handling, billing, retention, and availability.
+
+Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of this repository.
+
+## Current limitations
+
+- One implemented model provider: OpenRouter.
+- The `test` script is a placeholder with no test suite.
+- No OS-level shell sandbox.
+- Limited editing interface: create-new-file and exact text replacement.
+- Session-scoped in-memory permission rules.
+- Local, unencrypted JSON sessions.
+- Slash commands are prompt shortcuts, not hardcoded pipelines.
+- Compaction is lossy.
+
+## Roadmap
+
+### Implemented
+
+- Streaming responses and tool calls
+- Permission prompts and session allow rules
+- Context pruning and model-assisted compaction
+- Local session resume
+- Terminal workflow shortcuts
+
+### Planned
+
+- Atomic tool operations
+- Model context-window caching
+- Automated tests for tools, permissions, context, and normalization
+- More explicit provider configuration and adapter boundaries
+
+The first two planned items are recorded in [TODO.md](TODO.md).
+
+## Contributing
+
+1. Fork the repository.
+2. Create a focused branch.
+3. Make a source-aligned change.
+4. Run `bun run typecheck` and `bun run format:check`.
+5. Update docs when behavior changes.
+6. Open a pull request describing design, validation, and limitations.
+
+## License and author
+
+Chiku is distributed under the [MIT License](LICENSE).
+
+Maintained by **Ankit Pandey**. See the [Agent-Harness repository](https://github.com/ankit25bcs10610/Agent-Harness).

@@ -103,8 +103,8 @@ The loop maintains both a complete message history and a smaller active view sen
 ## Installation
 
 ```bash
-git clone https://github.com/ankit25bcs10610/abcd.git
-cd abcd
+git clone https://github.com/ankit25bcs10610/Agent-Harness.git
+cd Agent-Harness
 bun install
 ```
 

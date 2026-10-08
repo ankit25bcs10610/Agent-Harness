@@ -19,6 +19,27 @@ const tools = [
       required: ["id"],
     },
   },
+  {
+    name: "validate_payload",
+    description: "Inspect a structured payload",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        profile: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string", minLength: 2 },
+            age: { type: "integer", minimum: 0 },
+          },
+          required: ["name", "age"],
+        },
+        tags: { type: "array", items: { type: "string" }, minItems: 1 },
+      },
+      required: ["profile", "tags"],
+    },
+  },
 ];
 
 const lineReader = createInterface({ input: process.stdin });

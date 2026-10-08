@@ -54,7 +54,7 @@ test("MCP tool input validation and capability policy fail closed", async () => 
     toolTimeoutMs: 5_000,
     maxOutputChars: 5_000,
     enabled: true,
-    allowedTools: ["greet"],
+    allowedTools: ["greet", "validate_payload"],
   });
   connections.push(connection);
   await connection.connect();
@@ -91,6 +91,36 @@ test("MCP tool input validation and capability policy fail closed", async () => 
       },
     ),
   ).rejects.toThrow("central permission approval");
+  await expect(
+    connection.invoke(
+      "mcp.fixture-policy.validate_payload",
+      { profile: { name: "A", age: 4 }, tags: ["safe"] },
+      new AbortController().signal,
+      {
+        allowedTools: ["mcp.fixture-policy.validate_payload"],
+        permissionGranted: true,
+        permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+        asker: async () => "allow-once",
+        signal: new AbortController().signal,
+        maxOutputChars: 5_000,
+      },
+    ),
+  ).rejects.toThrow("minLength");
+  await expect(
+    connection.invoke(
+      "mcp.fixture-policy.validate_payload",
+      { profile: { name: "Ankit", age: 4, role: "admin" }, tags: ["safe"] },
+      new AbortController().signal,
+      {
+        allowedTools: ["mcp.fixture-policy.validate_payload"],
+        permissionGranted: true,
+        permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+        asker: async () => "allow-once",
+        signal: new AbortController().signal,
+        maxOutputChars: 5_000,
+      },
+    ),
+  ).rejects.toThrow("not permitted");
 });
 
 test("MCP resources and prompts use the negotiated client session", async () => {

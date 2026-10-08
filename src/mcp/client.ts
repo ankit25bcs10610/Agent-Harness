@@ -30,58 +30,114 @@ function classify(name: string, description: string) {
   return "unknown" as const;
 }
 
-function validateSchema(schema: Record<string, unknown>, value: unknown) {
-  for (const keyword of ["anyOf", "oneOf", "allOf", "not", "patternProperties"])
+function validateSchema(
+  schema: Record<string, unknown>,
+  value: unknown,
+  path = "arguments",
+) {
+  for (const keyword of [
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    "patternProperties",
+    "$ref",
+  ])
     if (keyword in schema)
       throw new Error(`unsupported MCP input schema keyword: ${keyword}`);
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("MCP tool arguments must be an object");
-  const type = schema.type;
-  if (type !== undefined && type !== "object")
-    throw new Error("unsupported MCP input schema: root must be an object");
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  const properties = schema.properties;
-  if (!properties || typeof properties !== "object") return;
-  for (const name of required) {
-    if (typeof name === "string" && !(name in value))
-      throw new Error(`missing required MCP argument: ${name}`);
+
+  if ("const" in schema && !Object.is(schema.const, value))
+    throw new Error(`${path} must equal the schema constant`);
+  if (
+    Array.isArray(schema.enum) &&
+    !schema.enum.some((item) => Object.is(item, value))
+  )
+    throw new Error(`${path} is not an allowed value`);
+
+  const expected = schema.type;
+  if (expected === undefined) return;
+  const actual = Array.isArray(value)
+    ? "array"
+    : value === null
+      ? "null"
+      : typeof value;
+  const validType =
+    (expected === "integer" &&
+      typeof value === "number" &&
+      Number.isInteger(value)) ||
+    expected === actual;
+  if (!validType) throw new Error(`${path} must be a ${String(expected)}`);
+
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength)
+      throw new Error(`${path} is shorter than minLength`);
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength)
+      throw new Error(`${path} is longer than maxLength`);
+    if (typeof schema.pattern === "string") {
+      let pattern: RegExp;
+      try {
+        pattern = new RegExp(schema.pattern);
+      } catch {
+        throw new Error(`${path} has an invalid schema pattern`);
+      }
+      if (!pattern.test(value))
+        throw new Error(`${path} does not match its required pattern`);
+    }
   }
-  for (const [name, rule] of Object.entries(properties)) {
-    if (!(name in value) || !rule || typeof rule !== "object") continue;
-    const expected = (rule as { type?: unknown }).type;
-    const ruleRecord = rule as Record<string, unknown>;
-    const actual = typeof (value as Record<string, unknown>)[name];
-    if (expected === "string" && actual !== "string")
-      throw new Error(`MCP argument ${name} must be a string`);
-    if (expected === "number" && actual !== "number")
-      throw new Error(`MCP argument ${name} must be a number`);
-    if (expected === "boolean" && actual !== "boolean")
-      throw new Error(`MCP argument ${name} must be a boolean`);
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum)
+      throw new Error(`${path} is below minimum`);
+    if (typeof schema.maximum === "number" && value > schema.maximum)
+      throw new Error(`${path} is above maximum`);
+  }
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems)
+      throw new Error(`${path} has too few items`);
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems)
+      throw new Error(`${path} has too many items`);
     if (
-      expected === "array" &&
-      !Array.isArray((value as Record<string, unknown>)[name])
+      schema.items &&
+      typeof schema.items === "object" &&
+      !Array.isArray(schema.items)
     )
-      throw new Error(`MCP argument ${name} must be an array`);
-    if (
-      expected === "object" &&
-      (actual !== "object" || (value as Record<string, unknown>)[name] === null)
-    )
-      throw new Error(`MCP argument ${name} must be an object`);
-    if (
-      Array.isArray(ruleRecord.enum) &&
-      !ruleRecord.enum.includes((value as Record<string, unknown>)[name])
-    )
-      throw new Error(`MCP argument ${name} is not an allowed value`);
-    if (
-      typeof ruleRecord.pattern === "string" &&
-      typeof (value as Record<string, unknown>)[name] === "string" &&
-      !new RegExp(ruleRecord.pattern).test(
-        (value as Record<string, unknown>)[name] as string,
-      )
-    )
-      throw new Error(
-        `MCP argument ${name} does not match its required pattern`,
+      value.forEach((item, index) =>
+        validateSchema(
+          schema.items as Record<string, unknown>,
+          item,
+          `${path}[${index}]`,
+        ),
       );
+    return;
+  }
+  if (expected !== "object") return;
+  if (!value || typeof value !== "object") return;
+  const object = value as Record<string, unknown>;
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  for (const name of required) {
+    if (typeof name === "string" && !(name in object))
+      throw new Error(`missing required MCP argument: ${path}.${name}`);
+  }
+  const properties = schema.properties;
+  if (
+    !properties ||
+    typeof properties !== "object" ||
+    Array.isArray(properties)
+  )
+    return;
+  const propertyRules = properties as Record<string, unknown>;
+  if (schema.additionalProperties === false)
+    for (const name of Object.keys(object))
+      if (!(name in propertyRules))
+        throw new Error(`${path}.${name} is not permitted`);
+  for (const [name, rule] of Object.entries(propertyRules)) {
+    if (!(name in object)) continue;
+    if (!rule || typeof rule !== "object" || Array.isArray(rule))
+      throw new Error(`${path}.${name} has an invalid schema`);
+    validateSchema(
+      rule as Record<string, unknown>,
+      object[name],
+      `${path}.${name}`,
+    );
   }
 }
 

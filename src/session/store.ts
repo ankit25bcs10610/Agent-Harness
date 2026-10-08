@@ -23,10 +23,13 @@ export function createSession(title: string): Session {
   };
 }
 
-export async function saveSession(session: Session): Promise<void> {
-  await mkdir(SESSION_DIR, { recursive: true });
+export async function saveSession(
+  session: Session,
+  sessionDir: string = SESSION_DIR,
+): Promise<void> {
+  await mkdir(sessionDir, { recursive: true });
 
-  const savePath = `${SESSION_DIR}/${session.id.replace(/[:.]/g, "-")}.json`;
+  const savePath = `${sessionDir}/${session.id.replace(/[:.]/g, "-")}.json`;
   const tmpPath = `${savePath}.tmp`; // atomic write
 
   try {
@@ -41,10 +44,12 @@ export async function saveSession(session: Session): Promise<void> {
 }
 
 // newest saved session, or undefined if there is none or it can't be read
-export async function loadLatestSession(): Promise<Session | undefined> {
+export async function loadLatestSession(
+  sessionDir: string = SESSION_DIR,
+): Promise<Session | undefined> {
   let files: string[];
   try {
-    files = await readdir(SESSION_DIR);
+    files = await readdir(sessionDir);
   } catch {
     return undefined; // folder doesn't exist yet
   }
@@ -57,7 +62,7 @@ export async function loadLatestSession(): Promise<Session | undefined> {
   if (!latest) return undefined;
 
   try {
-    const raw = await readFile(`${SESSION_DIR}/${latest}`, "utf-8");
+    const raw = await readFile(`${sessionDir}/${latest}`, "utf-8");
     const content = JSON.parse(raw) as Session;
     if (content.version != LATEST_VERSION) return undefined;
     return content;

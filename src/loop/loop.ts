@@ -77,6 +77,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     lastPromptTokens,
     execution: execution(),
     context: contextManager.state(),
+    ...(input.skills ? { skills: input.skills.state() } : {}),
   });
   let verificationReport;
 

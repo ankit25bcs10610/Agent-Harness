@@ -1,4 +1,5 @@
 import type { LoopState } from "../loop/types";
+import type { SkillLifecycleState } from "../skill/lifecycle";
 
 export type Session = {
   version: number;
@@ -8,6 +9,7 @@ export type Session = {
   updatedAt: string;
   title: string;
   state: LoopState | undefined;
+  skills?: SkillLifecycleState;
   status: "active" | "completed" | "interrupted" | "failed";
   stopReason?: string;
 };

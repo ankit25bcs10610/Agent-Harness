@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { Tool } from "../types";
-import { readFile } from "node:fs/promises";
-import { PATHS } from "../../config";
+import { discoverSkills, loadSkill as loadDiscoveredSkill } from "../../skill";
 
 export const loadSkill: Tool<
   { skillName: z.ZodString },
@@ -21,11 +20,13 @@ export const loadSkill: Tool<
         skillName.includes("/")
       )
         throw new Error("invalid skill name");
-      const skillPath = `${PATHS.skillsDir}/${skillName}.md`;
-      const skillContent = await readFile(skillPath, "utf-8");
-      const skillBody = skillContent.split("---")[2]?.trim();
-      if (!skillBody) return { skillBody: "No content in skill body" };
-      return { skillBody };
+      const discovery = await discoverSkills();
+      const skill = discovery.skills.find(
+        (candidate) => candidate.name === skillName,
+      );
+      if (!skill) throw new Error(`skill not found: ${skillName}`);
+      const loaded = await loadDiscoveredSkill(skill);
+      return { skillBody: loaded.instructions };
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Error reading skill "${skillName}": ${error.message}`);

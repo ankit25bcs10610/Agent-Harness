@@ -12,6 +12,7 @@ import { PATHS } from "../config";
 import type { AgentMessage, ToolMessage } from "../provider";
 import type { LoopState } from "../loop/types";
 import type { Session, SessionRetention, SessionSummary } from "./types";
+import type { SkillLifecycleState } from "../skill/lifecycle";
 
 const SESSION_DIR = PATHS.sessionsDir;
 export const SESSION_VERSION = 1;
@@ -110,6 +111,23 @@ function recoverUnfinishedTools(state: LoopState): LoopState {
   return { ...state, messages, view };
 }
 
+function validSkillState(value: unknown): value is SkillLifecycleState {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.active) ||
+    !Array.isArray(value.events)
+  )
+    return false;
+  if (!value.active.every((item) => typeof item === "string")) return false;
+  return value.events.every(
+    (event) =>
+      isRecord(event) &&
+      (event.type === "activated" || event.type === "deactivated") &&
+      typeof event.skill === "string" &&
+      typeof event.at === "number",
+  );
+}
+
 export function validateSession(value: unknown): Session {
   if (!isRecord(value)) throw new Error("session is not an object");
   const version = value.version === 0 ? SESSION_VERSION : value.version;
@@ -143,6 +161,13 @@ export function validateSession(value: unknown): Session {
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     title: value.title,
+    ...(value.skills === undefined
+      ? {}
+      : validSkillState(value.skills)
+        ? { skills: value.skills }
+        : (() => {
+            throw new Error("session skill state is invalid");
+          })()),
     state: state as LoopState | undefined,
     status:
       value.status === "completed" ||

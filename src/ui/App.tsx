@@ -22,6 +22,8 @@ import { createWorkflowController } from "../workflow/verify";
 import { runTool } from "../tool/registry";
 import type { ContextDiagnostics } from "../context/types";
 import { Header } from "./Header";
+import { SkillLifecycle } from "../skill/lifecycle";
+import { PATHS } from "../config";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -67,6 +69,8 @@ const COMMANDS: Record<string, string> = {
   "/repo": "Show a concise repository intelligence overview.",
   "/symbols": "Find important repository symbols relevant to the request.",
   "/impact": "Analyze likely dependent files affected by the current changes.",
+  "/skill":
+    "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
 
 function resolveCommand(text: string): string {
@@ -117,6 +121,11 @@ export function App({ systemPrompt, session, config }: Props) {
   const [ask, setAsk] = useState<AskRequest | null>(null);
   const [selected, setSelected] = useState(0);
   const sessionRef = useRef(session);
+  const skillLifecycleRef = useRef(
+    new SkillLifecycle(session.skills ?? session.state?.skills, {
+      projectDirectory: PATHS.skillsDir,
+    }),
+  );
 
   function push(kind: "user" | "assistant" | "error", text: string) {
     const id = nextId++;
@@ -167,6 +176,41 @@ export function App({ systemPrompt, session, config }: Props) {
       "/impact": "analyze_change_impact",
     };
     const localCommand = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+    if (localCommand === "/skill") {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const [operation, name] = remainder.split(/\s+/, 2);
+        if (!name && operation !== "off")
+          throw new Error("usage: /skill <name> or /skill off <name>");
+        if (operation === "off") {
+          if (!name) throw new Error("usage: /skill off <name>");
+          skillLifecycleRef.current.deactivate(name);
+          push("assistant", `Skill deactivated: ${name}`);
+        } else {
+          const loaded = await skillLifecycleRef.current.activate(
+            operation ?? "",
+          );
+          push(
+            "assistant",
+            `Skill activated: ${loaded.metadata.name} v${loaded.metadata.version}`,
+          );
+        }
+        sessionRef.current.skills = skillLifecycleRef.current.state();
+        if (sessionRef.current.state)
+          sessionRef.current.state = {
+            ...sessionRef.current.state,
+            skills: skillLifecycleRef.current.state(),
+          };
+        sessionRef.current.updatedAt = Date.now().toString();
+        await saveSession(sessionRef.current);
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
     if (localCommand && localTools[localCommand]) {
       try {
         const remainder = text.trim().slice(localCommand.length).trim();
@@ -211,6 +255,7 @@ export function App({ systemPrompt, session, config }: Props) {
         systemPrompt,
         config,
         ctx: toolContext,
+        skills: skillLifecycleRef.current,
         events: {
           onText: (c) => {
             liveRef.current += c;

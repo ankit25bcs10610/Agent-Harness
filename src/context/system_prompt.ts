@@ -1,7 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
 import type { SystemMessage } from "../provider";
-import type { Skill } from "./types";
-import { PATHS } from "../config";
+import { discoverSkills } from "../skill";
 
 export const generateSystemPrompt = async (): Promise<SystemMessage> => {
   const INTRODUCTION = `You are Chiku, an AI coding assistant that helps the user with software engineering tasks.
@@ -46,36 +44,17 @@ export const generateSystemPrompt = async (): Promise<SystemMessage> => {
 - Date: ${date}
 `;
 
-  let SKILLS = "";
-
-  try {
-    let skills: Skill[] = [];
-    const skillDir = PATHS.skillsDir;
-    const dirFiles = await readdir(skillDir);
-    const skillFiles = dirFiles.filter((file) => file.endsWith(".md"));
-
-    for (const file of skillFiles) {
-      const content = await readFile(`${skillDir}/${file}`, "utf-8");
-      const parts = content.split("---")[1];
-      const name = parts?.split("\n")[1];
-      const description = parts?.split("\n")[2];
-      if (
-        name?.split(" ")[0] != "name:" ||
-        description?.split(" ")[0] != "description:"
-      )
-        continue;
-
-      skills.push({
-        name: name.slice(5).trim(), // content after "name:"
-        description: description.slice(12).trim(), // content after "description:"
-      });
-    }
-
-    SKILLS = `# SKILLS:
-A skill is a specialized information you can use to do a particular task. Here is the list of skills available (use load_skill tool to load the complete skill body):
-${skills.map((skill) => `${skill.name}: ${skill.description}`).join("\n")}
+  const discovery = await discoverSkills();
+  const SKILLS = `# SKILLS:
+A skill is specialized information for a particular task. This metadata is intentionally lightweight; use load_skill to load complete instructions only when relevant.
+${discovery.skills
+  .map(
+    (skill) =>
+      `${skill.name} v${skill.version}: ${skill.description}${skill.tags.length ? ` [${skill.tags.join(", ")}]` : ""}`,
+  )
+  .join("\n")}
+${discovery.diagnostics.length ? `Diagnostics: ${discovery.diagnostics.map((item) => `${item.path}: ${item.error}`).join("; ")}` : ""}
 `;
-  } catch (error) {}
 
   const prompt = `${INTRODUCTION}
 ${STYLE}

@@ -23,6 +23,7 @@ import {
   retrieveCodeContext,
   analyzeChangeImpact,
 } from "./tools/repo_intelligence";
+import { listSkills, recommendSkill } from "./tools/skills";
 
 const tools: Tool<any, unknown>[] = [
   bashTool,
@@ -39,6 +40,9 @@ const tools: Tool<any, unknown>[] = [
   findDependenciesTool,
   findDependentsTool,
   retrieveCodeContext,
+  analyzeChangeImpact,
+  listSkills,
+  recommendSkill,
 ];
 
 export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(

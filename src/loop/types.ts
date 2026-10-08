@@ -11,6 +11,7 @@ import type {
   WorkflowController,
   WorkflowPolicy,
 } from "../workflow/types";
+import type { SkillLifecycle } from "../skill/lifecycle";
 
 // dependency injecting interfaces for loop
 
@@ -63,6 +64,7 @@ export interface LoopInput {
   checkpoint?: CheckpointHook;
   state?: LoopState | undefined;
   workflow?: WorkflowController;
+  skills?: SkillLifecycle;
 }
 
 export type StopReason =
@@ -121,4 +123,8 @@ export interface LoopState {
   lastPromptTokens: number;
   execution?: ExecutionStats;
   context?: ContextState;
+  skills?: {
+    active: string[];
+    events: { type: "activated" | "deactivated"; skill: string; at: number }[];
+  };
 }

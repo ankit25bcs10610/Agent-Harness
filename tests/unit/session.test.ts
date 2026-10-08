@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SkillLifecycleState } from "../../src/skill/lifecycle";
 import {
   createSession,
   loadLatestSession,
@@ -99,5 +100,15 @@ describe("session persistence", () => {
     expect(
       (await listSessions(directory)).map((item) => item.name).sort(),
     ).toEqual(["alpha", "beta"]);
+  });
+
+  test("preserves skill activation lifecycle state", () => {
+    const session = createSession("skills");
+    const skills: SkillLifecycleState = {
+      active: ["debugging"],
+      events: [{ type: "activated", skill: "debugging", at: 123 }],
+    };
+    const recovered = validateSession({ ...session, skills });
+    expect(recovered.skills).toEqual(skills);
   });
 });

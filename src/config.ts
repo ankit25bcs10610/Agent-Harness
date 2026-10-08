@@ -10,6 +10,9 @@ export const CONFIG: LoopConfig = {
   loopModel: "openai/gpt-4o",
   compactionModel: "openrouter/free",
   transcriptCapChars: 2000,
+  contextActiveRatio: 0.75,
+  recentContextTurns: 6,
+  maxMemoryEntries: 100,
   workflow: {
     root: process.cwd(),
     maxRepairAttempts: 1,

@@ -23,3 +23,35 @@ export type Skill = {
   name: string;
   description: string;
 };
+
+export type ContextMemory = {
+  id: string;
+  kind: "requirement" | "decision" | "edit" | "error" | "verification";
+  text: string;
+  sourceIndexes: number[];
+  invalidatedBy?: string;
+};
+
+export type ContextState = {
+  memories: ContextMemory[];
+  invalidatedPaths: string[];
+  compactionCount: number;
+};
+
+export type ContextDiagnostics = {
+  estimatedTokens: number;
+  budgetTokens: number;
+  retainedMessages: number;
+  rawMessages: number;
+  prunedMessages: number;
+  memoryEntries: number;
+  compactionCount: number;
+  usageRatio: number;
+};
+
+export type ContextPolicy = {
+  contextWindow: number;
+  activeRatio: number;
+  recentTurns: number;
+  maxMemoryEntries: number;
+};

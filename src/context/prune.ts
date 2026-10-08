@@ -12,45 +12,47 @@ export const prune: PruneMsgs = (
   maxContextRatio: number,
 ) => {
   const maxAllowedTokens = contextWindow * maxContextRatio; // max allowed context fill
-  const newMessages: AgentMessage[] = [];
-  let tokensUsed = 0;
-
-  // push the latest response in all cases
-  let fromLast = messages.length - 1;
-  while (fromLast && messages[fromLast]?.type !== "assistant") {
-    const msg = messages[fromLast];
-    fromLast--;
-    if (!msg) continue;
-    newMessages.push(msg);
-    if (msg.type === "tool") tokensUsed += estimateToolTokens(msg);
-  }
-
-  // start from the second last message
-  for (let i = fromLast; i >= 0; i--) {
-    const message = messages[i];
-
-    if (!message) continue;
-
-    if (message.type === "tool") {
-      tokensUsed += estimateToolTokens(message);
-    }
-
-    if (tokensUsed <= maxAllowedTokens) newMessages.push(message);
-    else {
-      if (message.type === "tool") {
-        const newContent = "[Tool output pruned. Rerun the tool to see output]";
-        newMessages.push({
-          type: message.type,
-          toolCallId: message.toolCallId,
-          content:
-            message.content.length > newContent.length // skip when the tool call output is small
-              ? newContent
-              : message.content,
-        });
-      } else {
-        newMessages.push({ ...message });
+  const groups: AgentMessage[][] = [];
+  for (let index = 0; index < messages.length;) {
+    const message = messages[index]!;
+    const group = [message];
+    index++;
+    if (message.type === "assistant" && message.toolCalls?.length) {
+      const ids = new Set(message.toolCalls.map((call) => call.toolCallId));
+      while (
+        index < messages.length &&
+        messages[index]?.type === "tool" &&
+        ids.has((messages[index] as ToolMessage).toolCallId)
+      ) {
+        group.push(messages[index]!);
+        index++;
       }
     }
+    groups.push(group);
   }
-  return newMessages.reverse();
+  const kept: AgentMessage[][] = [];
+  let tokensUsed = 0;
+  for (const group of groups.reverse()) {
+    const cost = group.reduce(
+      (total, message) =>
+        total + (message.type === "tool" ? estimateToolTokens(message) : 0),
+      0,
+    );
+    if (tokensUsed + cost <= maxAllowedTokens || kept.length === 0) {
+      kept.unshift(group);
+      tokensUsed += cost;
+      continue;
+    }
+    kept.unshift(
+      group.map((message) => {
+        if (message.type !== "tool") return { ...message };
+        const replacement =
+          "[Tool output pruned. Rerun the tool to see output]";
+        return message.content.length > replacement.length
+          ? { ...message, content: replacement }
+          : { ...message };
+      }),
+    );
+  }
+  return kept.flat();
 };

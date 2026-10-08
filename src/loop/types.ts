@@ -1,4 +1,5 @@
 import type { AgentMessage } from "../provider";
+import type { ContextDiagnostics, ContextState } from "../context/types";
 import type {
   CompleteStreamFunc,
   SystemMessage,
@@ -26,6 +27,9 @@ export interface LoopConfig {
   transcriptCapChars: number;
   wallClockMs?: number;
   workflow?: WorkflowPolicy;
+  contextActiveRatio?: number;
+  recentContextTurns?: number;
+  maxMemoryEntries?: number;
 }
 
 export type LifecycleState =
@@ -86,6 +90,7 @@ export interface LoopOutput {
   state: LoopState;
   execution: ExecutionStats;
   verification?: VerificationReport;
+  context?: ContextDiagnostics;
 }
 
 export interface ExecutionStats {
@@ -115,4 +120,5 @@ export interface LoopState {
   summarizedUpTo: number;
   lastPromptTokens: number;
   execution?: ExecutionStats;
+  context?: ContextState;
 }

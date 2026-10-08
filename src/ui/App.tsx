@@ -19,6 +19,7 @@ import { TOOLS, UI } from "../config";
 import type { LoopConfig } from "../loop/types";
 import { StatusBar } from "./StatusBar";
 import { createWorkflowController } from "../workflow/verify";
+import type { ContextDiagnostics } from "../context/types";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -83,6 +84,8 @@ export function App({ systemPrompt, session, config }: Props) {
   const [liveReasoning, setLiveReasoning] = useState("");
   const [liveTool, setLiveTool] = useState<LiveTool | null>(null);
   const [running, setRunning] = useState(false);
+  const [contextDiagnostics, setContextDiagnostics] =
+    useState<ContextDiagnostics>();
 
   // finished items are printed once at the current width; after a resize, clear and reprint them
   useEffect(() => {
@@ -198,6 +201,7 @@ export function App({ systemPrompt, session, config }: Props) {
       });
 
       sessionRef.current.state = result.state;
+      setContextDiagnostics(result.context);
       sessionRef.current.updatedAt = Date.now().toString();
       sessionRef.current.status =
         result.stopReason === "stop"
@@ -335,6 +339,8 @@ export function App({ systemPrompt, session, config }: Props) {
         dangerAt={Math.round(config.compactionRatio * 100)}
         title={sessionRef.current.title}
         status={status}
+        retainedMessages={contextDiagnostics?.retainedMessages}
+        prunedMessages={contextDiagnostics?.prunedMessages}
       />
     </>
   );

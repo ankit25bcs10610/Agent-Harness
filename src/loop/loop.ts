@@ -1,9 +1,9 @@
 import { compact } from "../context/compact";
-import { prune } from "../context/prune";
 import type { AgentMessage } from "../provider";
 import { generateToolsArray } from "../tool";
 import { dispatchTool } from "./dispatch";
 import type { ToolContext } from "../tool/types";
+import { ContextManager } from "../context/manager";
 import type {
   AgentEvent,
   ExecutionStats,
@@ -44,6 +44,15 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
   let toolCalls = 0;
   let usageIncomplete = false;
   let lifecycle: LifecycleState = "initializing";
+  const contextManager = new ContextManager(
+    {
+      contextWindow: cfg.contextWindow,
+      activeRatio: cfg.contextActiveRatio ?? 0.75,
+      recentTurns: cfg.recentContextTurns ?? 6,
+      maxMemoryEntries: cfg.maxMemoryEntries ?? 100,
+    },
+    input.state?.context,
+  );
 
   const emit = (event: AgentEvent) => input.events?.onEvent?.(event);
   const setLifecycle = (state: LifecycleState) => {
@@ -67,6 +76,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     summarizedUpTo: previousSummarizedUpTo,
     lastPromptTokens,
     execution: execution(),
+    context: contextManager.state(),
   });
   let verificationReport;
 
@@ -106,6 +116,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
       state,
       execution: execution(),
       ...(verificationReport ? { verification: verificationReport } : {}),
+      context: contextManager.diagnostics(),
     };
   };
 
@@ -123,31 +134,40 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
       if (overWallClock()) return finish("wall_clock");
       if (iterations >= cfg.maxIterations) return finish("max_iterations");
       if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
-      if (lastPromptTokens >= cfg.contextWindow * cfg.pruneRatio)
-        lastMessageView = prune(
-          lastMessageView,
-          cfg.contextWindow,
-          cfg.maxPruneAllowanceRatio,
-        );
       if (lastPromptTokens >= cfg.contextWindow * cfg.compactionRatio) {
-        const summaryResult = await compact(
-          previousSummary,
-          previousSummarizedUpTo,
-          messages,
-          ctx.signal,
-          cfg.compactionModel,
-          cfg.transcriptCapChars,
-          input.complete,
-        );
-        if (summaryResult) {
-          const [summary, summarizedUpTo, compactionTokensUsed] = summaryResult;
-          lastMessageView = buildMsgView(summary, summarizedUpTo, messages);
-          previousSummary = summary;
-          previousSummarizedUpTo = summarizedUpTo;
-          tokensUsed += compactionTokensUsed;
-          if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
+        try {
+          const summaryResult = await compact(
+            previousSummary,
+            previousSummarizedUpTo,
+            messages,
+            ctx.signal,
+            cfg.compactionModel,
+            cfg.transcriptCapChars,
+            input.complete,
+          );
+          if (summaryResult) {
+            const [summary, summarizedUpTo, compactionTokensUsed] =
+              summaryResult;
+            lastMessageView = buildMsgView(summary, summarizedUpTo, messages);
+            previousSummary = summary;
+            previousSummarizedUpTo = summarizedUpTo;
+            contextManager.markCompacted();
+            tokensUsed += compactionTokensUsed;
+            if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
+          }
+        } catch (error) {
+          if (ctx.signal.aborted) return finish("interrupted");
+          // Deterministic selection remains available when model-assisted compaction fails.
+          lastMessageView = contextManager.select(
+            lastMessageView,
+            input.messages.map((message) => message.content ?? "").join(" "),
+          );
         }
       }
+      lastMessageView = contextManager.buildWindow(
+        lastMessageView,
+        input.messages.map((message) => message.content ?? "").join(" "),
+      );
       if (overWallClock()) return finish("wall_clock");
       setLifecycle("reasoning");
       modelRequests++;

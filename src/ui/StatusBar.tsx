@@ -9,6 +9,8 @@ type Props = {
   dangerAt: number; // percent where compaction starts
   title: string;
   status: string;
+  retainedMessages?: number | undefined;
+  prunedMessages?: number | undefined;
 };
 
 function formatTokens(n: number): string {
@@ -29,6 +31,8 @@ export function StatusBar({
   dangerAt,
   title,
   status,
+  retainedMessages,
+  prunedMessages,
 }: Props) {
   const contextColor =
     contextPercent >= dangerAt
@@ -45,6 +49,11 @@ export function StatusBar({
           {formatTokens(contextWindow)}{" "}
         </Text>
         <Text color={contextColor}>{contextPercent}%</Text>
+        {retainedMessages !== undefined && prunedMessages !== undefined ? (
+          <Text dimColor>
+            {" · "}kept {retainedMessages}, pruned {prunedMessages}
+          </Text>
+        ) : null}
       </Box>
       <Text dimColor>
         {title || "new session"} . {status}

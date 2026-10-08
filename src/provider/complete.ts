@@ -19,6 +19,7 @@ export const complete: CompleteFunc = async (
     {
       chatRequest: {
         model,
+        maxTokens: 4000,
         messages: messages.map(toSdkMsg),
         tools: tools.map(toSdkTool),
         stream: false,
@@ -45,6 +46,7 @@ export const completeStream: CompleteStreamFunc = async (
     {
       chatRequest: {
         model,
+        maxTokens: 4000,
         messages: messages.map(toSdkMsg),
         tools: tools.map(toSdkTool),
         stream: true,

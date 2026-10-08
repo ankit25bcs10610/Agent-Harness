@@ -31,6 +31,12 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Secret scan
+        run: bun run security:check
+
+      - name: Dependency audit
+        run: bun audit --audit-level=high
+
       - name: Formatting
         run: bun run format:ci
 

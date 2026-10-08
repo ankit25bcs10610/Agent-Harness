@@ -18,6 +18,12 @@ import { runTool } from "../../src/tool/registry";
 import type { ToolContext } from "../../src/tool/types";
 
 let root = "";
+function portablePath(value: string) {
+  return value
+    .replaceAll("\\", "/")
+    .replace(/^\/(\w)\//, "$1:/")
+    .toLowerCase();
+}
 afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
@@ -194,9 +200,7 @@ test("workspace execution context prevents cross-workspace tool access", async (
     JSON.stringify({ command: "pwd" }),
     context,
   );
-  expect(output.replaceAll("\\", "/")).toContain(
-    first.worktreePath.replaceAll("\\", "/"),
-  );
+  expect(portablePath(output)).toContain(portablePath(first.worktreePath));
 });
 
 test("reviews and integrates an exact clean workspace diff without overwriting the target", async () => {

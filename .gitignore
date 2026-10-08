@@ -24,4 +24,4 @@ Thumbs.db
 .idea/
 
 # Agent Harness local state
-.jig/sessions/
+.agent-harness/sessions/

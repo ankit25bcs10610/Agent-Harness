@@ -7,7 +7,7 @@ export const CONFIG: LoopConfig = {
   maxPruneAllowanceRatio: 0.1,
   compactionRatio: 0.9,
   pruneRatio: 0.5,
-  loopModel: "anthropic/claude-haiku-5.5",
+  loopModel: "openai/gpt-4o",
   compactionModel: "openrouter/free",
   transcriptCapChars: 2000,
 };
@@ -18,10 +18,10 @@ export const TOOLS = {
 };
 
 // project-local storage
-const JIG_DIR = `${process.cwd()}/.jig`;
+const AGENT_HARNESS_DIR = `${process.cwd()}/.agent-harness`;
 export const PATHS = {
-  skillsDir: `${JIG_DIR}/skills`,
-  sessionsDir: `${JIG_DIR}/sessions`,
+  skillsDir: `${AGENT_HARNESS_DIR}/skills`,
+  sessionsDir: `${AGENT_HARNESS_DIR}/sessions`,
 };
 
 // display only

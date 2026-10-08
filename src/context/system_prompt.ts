@@ -16,6 +16,7 @@ export const generateSystemPrompt = async (): Promise<SystemMessage> => {
 - If output says [truncated] or [Tool output pruned], rerun with a narrower query.
 - Use list_files for bounded repository navigation, search_files for text/regex searches, and search_symbols for lightweight declarations. Prefer pagination and narrow globs; do not read the whole repository.
 - Use apply_patch for multi-file edits: preview with dryRun when useful, preserve the returned undoToken, and never reapply a stale or conflicting patch.
+- For governed changes, create_change_contract from the actual patch first, inspect its risk and preconditions, then pass its contractId to apply_patch. Use validate_change_contract before retrying a stale proposal.
 `;
 
   const RULES = `# WORKING RULES:

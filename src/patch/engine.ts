@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import {
   chmod,
   lstat,
+  mkdir,
   readFile,
   rename,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -17,11 +19,17 @@ export type PatchHunk = {
   newCount: number;
   lines: string[];
 };
-export type PatchFile = { path: string; oldPath?: string; hunks: PatchHunk[] };
+export type PatchFile = {
+  path: string;
+  oldPath?: string;
+  operation?: "create" | "modify" | "delete" | "rename";
+  hunks: PatchHunk[];
+};
 export type PatchPreview = {
   path: string;
   diff: string;
   originalHash: string;
+  proposedHash: string;
   changed: boolean;
 };
 export type PatchResult = {
@@ -38,6 +46,8 @@ type StoredFile = {
   mode: number;
   hash: string;
   appliedHash?: string;
+  created?: boolean;
+  deleted?: boolean;
 };
 type UndoRecord = { root: string; files: StoredFile[] };
 const undoRecords = new Map<string, UndoRecord>();
@@ -51,8 +61,11 @@ function splitContent(content: string): {
   trailing: boolean;
 } {
   const newline = content.includes("\r\n") ? "\r\n" : "\n";
+  if (content === "") return { lines: [], newline, trailing: true };
   const trailing = content.endsWith("\n") || content.endsWith("\r");
-  const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const lines = content
+    ? content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
+    : [];
   if (trailing) lines.pop();
   return { lines, newline, trailing };
 }
@@ -75,10 +88,19 @@ export function parsePatch(input: string): PatchFile[] {
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index]!;
     if (line === "*** Begin Patch" || line === "*** End Patch") continue;
-    const custom = line.match(/^\*\*\* (?:Update|Delete|Add) File: (.+)$/);
+    const custom = line.match(/^\*\*\* (Update|Delete|Add) File: (.+)$/);
     const gitOld = line.match(/^--- (?:a\/)?(.+?)(?:\t.*)?$/);
     if (custom) {
-      current = { path: custom[1]!, hunks: [] };
+      current = {
+        path: custom[2]!,
+        operation:
+          custom[1] === "Add"
+            ? "create"
+            : custom[1] === "Delete"
+              ? "delete"
+              : "modify",
+        hunks: [],
+      };
       files.push(current);
       hunk = undefined;
       continue;
@@ -87,8 +109,22 @@ export function parsePatch(input: string): PatchFile[] {
       const next = lines[++index];
       const gitNew = next?.match(/^\+\+\+ (?:b\/)?(.+?)(?:\t.*)?$/);
       if (!gitNew) throw new Error("patch is missing +++ file header");
-      const parsedFile: PatchFile = { path: gitNew[1]!, hunks: [] };
-      if (gitOld[1]) parsedFile.oldPath = gitOld[1];
+      const oldPath = gitOld[1]!;
+      const newPath = gitNew[1]!;
+      const parsedFile: PatchFile = {
+        path: newPath === "/dev/null" ? oldPath : newPath,
+        operation:
+          oldPath === "/dev/null"
+            ? "create"
+            : newPath === "/dev/null"
+              ? "delete"
+              : oldPath !== newPath
+                ? "rename"
+                : "modify",
+        hunks: [],
+      };
+      if (oldPath !== "/dev/null" && oldPath !== newPath)
+        parsedFile.oldPath = oldPath;
       current = parsedFile;
       files.push(parsedFile);
       hunk = undefined;
@@ -140,7 +176,7 @@ function applyFilePatch(
   const result: string[] = [];
   let sourceIndex = 0;
   for (const hunk of file.hunks) {
-    const start = hunk.oldStart - 1;
+    const start = hunk.oldStart === 0 ? 0 : hunk.oldStart - 1;
     if (start < sourceIndex || start > original.lines.length)
       throw new Error(`hunk location is outside ${file.path}`);
     result.push(...original.lines.slice(sourceIndex, start));
@@ -219,31 +255,40 @@ export async function applyPatch(
   for (const file of files) {
     if (options.signal?.aborted) throw new Error("patch cancelled");
     const canonical = await canonicalizePath(file.path, root);
-    if (!canonical.exists) throw new Error(`file does not exist: ${file.path}`);
-    await assertNoSymlinkRace(canonical.target);
-    const info = await stat(canonical.target);
-    const content = await readFile(canonical.target);
+    if (!canonical.exists && file.operation !== "create")
+      throw new Error(`file does not exist: ${file.path}`);
+    if (canonical.exists) await assertNoSymlinkRace(canonical.target);
+    const info = canonical.exists ? await stat(canonical.target) : undefined;
+    const content = canonical.exists
+      ? await readFile(canonical.target)
+      : Buffer.alloc(0);
     if (content.includes(0))
       throw new Error(`binary file is not patchable: ${file.path}`);
     originals.push({
       path: canonical.target,
       content,
-      mode: info.mode,
+      mode: info?.mode ?? 0o644,
       hash: hash(content),
+      ...(file.operation === "create" ? { created: true } : {}),
+      ...(file.operation === "delete" ? { deleted: true } : {}),
     });
-    const result = applyFilePatch(content.toString("utf8"), {
-      ...file,
-      path: file.path,
-    });
+    const result = applyFilePatch(
+      file.operation === "create" ? "" : content.toString("utf8"),
+      {
+        ...file,
+        path: file.path,
+      },
+    );
     previews.push({
       path: canonical.target,
       diff: result.diff,
       originalHash: hash(content),
+      proposedHash: hash(Buffer.from(result.content, "utf8")),
       changed: result.content !== content.toString("utf8"),
     });
-    if (!result.content)
+    if (!result.content && file.operation !== "delete")
       throw new Error(
-        `patch would produce an empty file without explicit deletion support: ${file.path}`,
+        `patch would produce an empty file without explicit delete operation: ${file.path}`,
       );
   }
   if (options.dryRun) return { applied: false, dryRun: true, files: previews };
@@ -253,15 +298,29 @@ export async function applyPatch(
       if (options.signal?.aborted) throw new Error("patch cancelled");
       const original = originals[index]!;
       const canonical = original.path;
-      await assertNoSymlinkRace(canonical);
-      const current = await readFile(canonical);
+      if (file.operation === "create")
+        await mkdir(dirname(canonical), { recursive: true });
+      if (file.operation === "create")
+        await assertNoSymlinkRace(dirname(canonical));
+      else await assertNoSymlinkRace(canonical);
+      const current =
+        file.operation === "create"
+          ? Buffer.alloc(0)
+          : await readFile(canonical);
       if (hash(current) !== original.hash)
         throw new Error(`file changed concurrently: ${file.path}`);
-      const next = applyFilePatch(current.toString("utf8"), file).content;
-      const temp = `${canonical}.chiku-patch-${process.pid}-${index}.tmp`;
-      await writeFile(temp, next, { mode: original.mode });
-      await rename(temp, canonical);
-      await chmod(canonical, original.mode & 0o7777);
+      const next = applyFilePatch(
+        file.operation === "create" ? "" : current.toString("utf8"),
+        file,
+      ).content;
+      if (file.operation === "delete") {
+        await unlink(canonical);
+      } else {
+        const temp = `${canonical}.chiku-patch-${process.pid}-${index}.tmp`;
+        await writeFile(temp, next, { mode: original.mode });
+        await rename(temp, canonical);
+        await chmod(canonical, original.mode & 0o7777);
+      }
       written.push({
         ...original,
         appliedHash: hash(Buffer.from(next, "utf8")),
@@ -271,12 +330,16 @@ export async function applyPatch(
     let rolledBack = true;
     for (const original of written.reverse()) {
       try {
-        const current = await readFile(original.path);
-        if (original.appliedHash && hash(current) === original.appliedHash)
-          await writeFile(original.path, original.content, {
-            mode: original.mode,
-          });
-        else rolledBack = false;
+        const current = original.deleted
+          ? Buffer.alloc(0)
+          : await readFile(original.path);
+        if (original.appliedHash && hash(current) === original.appliedHash) {
+          if (original.created) await unlink(original.path);
+          else
+            await writeFile(original.path, original.content, {
+              mode: original.mode,
+            });
+        } else rolledBack = false;
       } catch {
         rolledBack = false;
       }
@@ -311,6 +374,18 @@ export async function undoPatch(
   const restored: string[] = [];
   for (const file of record.files) {
     if (signal?.aborted) throw new Error("undo cancelled");
+    if (file.deleted) {
+      await writeFile(file.path, file.content, { mode: file.mode });
+      await chmod(file.path, file.mode & 0o7777);
+      restored.push(file.path);
+      continue;
+    }
+    if (file.created) {
+      await assertNoSymlinkRace(file.path);
+      await unlink(file.path);
+      restored.push(file.path);
+      continue;
+    }
     await assertNoSymlinkRace(file.path);
     await writeFile(file.path, file.content, { mode: file.mode });
     await chmod(file.path, file.mode & 0o7777);

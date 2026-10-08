@@ -24,6 +24,11 @@ import {
   analyzeChangeImpact,
 } from "./tools/repo_intelligence";
 import { listSkills, recommendSkill } from "./tools/skills";
+import {
+  createChangeContract,
+  listChangeContracts,
+  validateChangeContract,
+} from "./tools/change_contract";
 
 const tools: Tool<any, unknown>[] = [
   bashTool,
@@ -43,6 +48,9 @@ const tools: Tool<any, unknown>[] = [
   analyzeChangeImpact,
   listSkills,
   recommendSkill,
+  createChangeContract,
+  validateChangeContract,
+  listChangeContracts,
 ];
 
 export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(

@@ -69,6 +69,7 @@ const COMMANDS: Record<string, string> = {
   "/repo": "Show a concise repository intelligence overview.",
   "/symbols": "Find important repository symbols relevant to the request.",
   "/impact": "Analyze likely dependent files affected by the current changes.",
+  "/contracts": "List persisted change contracts and their current status.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
@@ -174,6 +175,7 @@ export function App({ systemPrompt, session, config }: Props) {
       "/repo": "repo_overview",
       "/symbols": "retrieve_code_context",
       "/impact": "analyze_change_impact",
+      "/contracts": "list_change_contracts",
     };
     const localCommand = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
     if (localCommand === "/skill") {

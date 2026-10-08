@@ -48,6 +48,28 @@ test("applies a patch, preserves newline style and supports verified undo", asyn
   expect(await readFile(path, "utf8")).toBe("one\r\ntwo\r\n");
 });
 
+test("supports explicit create and delete operations with undo", async () => {
+  root = await mkdtemp(join(tmpdir(), "chiku-patch-"));
+  const created = await applyPatch(
+    root,
+    "*** Begin Patch\n*** Add File: created.txt\n@@ -0,0 +1,1 @@\n+created\n*** End Patch",
+    { signal: signal() },
+  );
+  expect(await readFile(join(root, "created.txt"), "utf8")).toBe("created\n");
+  await undoPatch(created.undoToken!, signal());
+  await expect(readFile(join(root, "created.txt"), "utf8")).rejects.toThrow();
+
+  await writeFile(join(root, "deleted.txt"), "remove\n");
+  const deleted = await applyPatch(
+    root,
+    "*** Begin Patch\n*** Delete File: deleted.txt\n@@ -1,1 +0,0 @@\n-remove\n*** End Patch",
+    { signal: signal() },
+  );
+  await expect(readFile(join(root, "deleted.txt"), "utf8")).rejects.toThrow();
+  await undoPatch(deleted.undoToken!, signal());
+  expect(await readFile(join(root, "deleted.txt"), "utf8")).toBe("remove\n");
+});
+
 test("rejects malformed and stale patches before modification", async () => {
   root = await mkdtemp(join(tmpdir(), "chiku-patch-"));
   const path = join(root, "file.txt");

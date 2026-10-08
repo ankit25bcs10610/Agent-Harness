@@ -32,6 +32,7 @@ const CHIKU_DIR = `${process.cwd()}/.chiku`;
 export const PATHS = {
   skillsDir: `${CHIKU_DIR}/skills`,
   sessionsDir: `${CHIKU_DIR}/sessions`,
+  contractsDir: `${CHIKU_DIR}/contracts`,
 };
 
 // display only

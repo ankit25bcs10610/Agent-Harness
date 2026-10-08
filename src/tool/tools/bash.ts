@@ -39,12 +39,15 @@ export const bashTool: Tool<
     explanation: `Run shell command: ${args.command}`,
     risk: "high",
   }),
-  execute: async (args: any, signal) => {
+  execute: async (args: any, signal, context) => {
     const result = await executor.run(
       {
         command: args.command,
         shell: args.shell,
-        cwd: args.cwd,
+        ...(context?.workspace?.authorizedRoot
+          ? { workspaceRoot: context.workspace.authorizedRoot }
+          : {}),
+        cwd: args.cwd ?? context?.workspace?.cwd,
         timeoutMs: args.timeoutMs,
         maxOutputChars: args.maxOutputChars,
         env: (args.env ?? {}) as Record<string, string>,

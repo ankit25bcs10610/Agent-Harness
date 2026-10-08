@@ -172,9 +172,12 @@ export class ProcessExecutor {
         cwd = await realpath(
           isAbsolute(requestedCwd)
             ? requestedCwd
-            : resolve(process.cwd(), requestedCwd),
+            : resolve(request.workspaceRoot ?? process.cwd(), requestedCwd),
         );
-        const relativeCwd = relative(await realpath(process.cwd()), cwd);
+        const relativeCwd = relative(
+          await realpath(request.workspaceRoot ?? process.cwd()),
+          cwd,
+        );
         if (relativeCwd.startsWith("..") || isAbsolute(relativeCwd)) {
           throw new Error("working directory must be inside the workspace");
         }

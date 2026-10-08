@@ -1,6 +1,7 @@
 import z from "zod";
 import { searchRepositorySymbols } from "../repository";
 import type { Tool } from "../types";
+import { workspaceRoot } from "../../workspace";
 
 export const searchSymbols: Tool<any, unknown> = {
   name: "search_symbols",
@@ -21,12 +22,12 @@ export const searchSymbols: Tool<any, unknown> = {
     explanation: `Search source symbols under ${args.path ?? "."}`,
     risk: "normal",
   }),
-  execute: async (args: any, signal) => {
+  execute: async (args: any, signal, context) => {
     if (args.name && !/^[A-Za-z_$][\w$]*$/.test(args.name))
       throw new Error("symbol name must be an identifier");
     return searchRepositorySymbols(
       args.name,
-      { root: args.path ?? process.cwd(), ...args },
+      { root: await workspaceRoot(context?.workspace, args.path), ...args },
       signal,
     );
   },

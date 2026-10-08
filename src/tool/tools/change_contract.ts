@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildRepositoryIndex } from "../../intelligence";
+import { join } from "node:path";
 import {
   loadContract,
   listContracts,
@@ -8,6 +8,7 @@ import {
 import { planChange } from "../../contract/planner";
 import { validateContractPreconditions } from "../../contract/preconditions";
 import type { Tool } from "../types";
+import { workspaceRoot } from "../../workspace";
 
 const root = z.string().optional();
 const permission = (operation: string, target: unknown) => ({
@@ -30,16 +31,20 @@ export const createChangeContract: Tool<any, unknown> = {
     patch: z.string().min(1),
   }),
   getPermissionKey: (args) => permission("Inspect", args.root),
-  execute: async (args: any) => {
+  execute: async (args: any, _signal, context) => {
+    const directory = await workspaceRoot(context?.workspace, args.root);
     const contract = await planChange({
-      root: args.root ?? process.cwd(),
+      root: directory,
       taskId: args.taskId,
       sessionId: args.sessionId,
       userRequest: args.userRequest,
       objective: args.objective,
       patch: args.patch,
     });
-    const path = await saveContract(contract);
+    const path = await saveContract(
+      contract,
+      join(directory, ".chiku", "contracts"),
+    );
     return {
       contractId: contract.contractId,
       revision: contract.revision,
@@ -59,14 +64,16 @@ export const validateChangeContract: Tool<any, unknown> = {
     "Validate a persisted change contract against the current workspace and file hashes.",
   parameters: z.object({ contractId: z.string().uuid(), root }),
   getPermissionKey: (args) => permission("Validate", args.root),
-  execute: async (args: any) => {
-    const contract = await loadContract(args.contractId);
+  execute: async (args: any, _signal, context) => {
+    const directory = await workspaceRoot(context?.workspace, args.root);
+    const contract = await loadContract(
+      args.contractId,
+      undefined,
+      join(directory, ".chiku", "contracts"),
+    );
     if (!contract)
       throw new Error(`change contract not found: ${args.contractId}`);
-    const results = await validateContractPreconditions(
-      contract,
-      args.root ?? process.cwd(),
-    );
+    const results = await validateContractPreconditions(contract, directory);
     return {
       contractId: contract.contractId,
       revision: contract.revision,
@@ -82,8 +89,12 @@ export const listChangeContracts: Tool<any, unknown> = {
     "List the latest immutable revision of persisted change contracts.",
   parameters: z.object({}),
   getPermissionKey: () => permission("List", ".chiku/contracts"),
-  execute: async () =>
-    (await listContracts()).map((contract) => ({
+  execute: async (_args, _signal, context) =>
+    (
+      await listContracts(
+        join(await workspaceRoot(context?.workspace), ".chiku", "contracts"),
+      )
+    ).map((contract) => ({
       contractId: contract.contractId,
       revision: contract.revision,
       taskId: contract.taskId,

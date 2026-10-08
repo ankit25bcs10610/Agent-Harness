@@ -94,6 +94,7 @@ export function createWorkflowController(
       {
         command,
         cwd: policy.root,
+        workspaceRoot: policy.root,
         timeoutMs: policy.commandTimeoutMs,
         maxOutputChars: policy.maxOutputChars,
       },

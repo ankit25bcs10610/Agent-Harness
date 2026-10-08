@@ -23,9 +23,12 @@ export const strReplace: Tool<
     explanation: `Modify file: ${path}`,
     risk: "high",
   }),
-  execute: async ({ path, oldString, newString }) => {
+  execute: async ({ path, oldString, newString }, _signal, context) => {
     try {
-      const canonical = await canonicalizePath(path, process.cwd());
+      const canonical = await canonicalizePath(
+        path,
+        context?.workspace?.authorizedRoot ?? process.cwd(),
+      );
       if (!canonical.exists) throw new Error("file does not exist");
       await assertNoSymlinkRace(canonical.target);
       const content = await readFile(canonical.target, "utf-8");

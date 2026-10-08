@@ -24,6 +24,7 @@ import type { ContextDiagnostics } from "../context/types";
 import { Header } from "./Header";
 import { SkillLifecycle } from "../skill/lifecycle";
 import { PATHS } from "../config";
+import { WorkspaceManager, type WorkspaceExecutionContext } from "../workspace";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -70,6 +71,8 @@ const COMMANDS: Record<string, string> = {
   "/symbols": "Find important repository symbols relevant to the request.",
   "/impact": "Analyze likely dependent files affected by the current changes.",
   "/contracts": "List persisted change contracts and their current status.",
+  "/workspaces": "List managed Git workspaces.",
+  "/workspace": "Manage workspaces: list, create, show, use, status, or diff.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
@@ -127,6 +130,12 @@ export function App({ systemPrompt, session, config }: Props) {
       projectDirectory: PATHS.skillsDir,
     }),
   );
+  const workspaceManagerRef = useRef(
+    new WorkspaceManager({ repositoryRoot: process.cwd() }),
+  );
+  const activeWorkspaceRef = useRef<WorkspaceExecutionContext | undefined>(
+    undefined,
+  );
 
   function push(kind: "user" | "assistant" | "error", text: string) {
     const id = nextId++;
@@ -178,6 +187,79 @@ export function App({ systemPrompt, session, config }: Props) {
       "/contracts": "list_change_contracts",
     };
     const localCommand = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+    if (localCommand === "/workspaces" || localCommand === "/workspace") {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const [operation = "list", value] = remainder.split(/\s+/, 2);
+        if (localCommand === "/workspaces" || operation === "list") {
+          const workspaces = await workspaceManagerRef.current.list();
+          push("assistant", JSON.stringify(workspaces, null, 2));
+        } else if (operation === "create") {
+          const workspace = await workspaceManagerRef.current.create({
+            taskId: value || `task-${Date.now()}`,
+            sessionId: sessionRef.current.id,
+          });
+          push(
+            "assistant",
+            `Workspace created: ${workspace.workspaceId}\n${workspace.worktreePath}`,
+          );
+        } else if (operation === "use") {
+          if (!value) throw new Error("usage: /workspace use <id>");
+          const selectedWorkspace =
+            await workspaceManagerRef.current.require(value);
+          const controller = new AbortController();
+          activeWorkspaceRef.current =
+            await workspaceManagerRef.current.executionContext(
+              value,
+              controller.signal,
+            );
+          permissions.projectRoot = activeWorkspaceRef.current.authorizedRoot;
+          push(
+            "assistant",
+            `Active workspace: ${selectedWorkspace.workspaceId}\n${selectedWorkspace.worktreePath}`,
+          );
+        } else if (operation === "reconcile") {
+          push(
+            "assistant",
+            JSON.stringify(
+              await workspaceManagerRef.current.reconcile(),
+              null,
+              2,
+            ),
+          );
+        } else if (["show", "status", "diff"].includes(operation)) {
+          if (!value) throw new Error(`usage: /workspace ${operation} <id>`);
+          if (operation === "show" || operation === "status")
+            push(
+              "assistant",
+              JSON.stringify(
+                await workspaceManagerRef.current.require(value),
+                null,
+                2,
+              ),
+            );
+          else
+            push(
+              "assistant",
+              JSON.stringify(
+                await workspaceManagerRef.current.diff(value),
+                null,
+                2,
+              ),
+            );
+        } else {
+          throw new Error(
+            "supported workspace commands: list, create, show, use, status, diff, reconcile",
+          );
+        }
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
     if (localCommand === "/skill") {
       try {
         const remainder = text.trim().slice(localCommand.length).trim();
@@ -229,6 +311,9 @@ export function App({ systemPrompt, session, config }: Props) {
           signal: controller.signal,
           maxOutputChars: TOOLS.maxOutputChars,
           permissions,
+          ...(activeWorkspaceRef.current
+            ? { workspace: activeWorkspaceRef.current }
+            : {}),
         });
         push("assistant", result);
       } finally {
@@ -244,11 +329,23 @@ export function App({ systemPrompt, session, config }: Props) {
         signal: controller.signal,
         maxOutputChars: TOOLS.maxOutputChars,
         permissions,
+        ...(activeWorkspaceRef.current
+          ? { workspace: activeWorkspaceRef.current }
+          : {}),
       };
       const workflow = config.workflow
-        ? createWorkflowController(config.workflow, toolContext, {
-            onPhase: (phase) => setLiveReasoning(`workflow: ${phase}`),
-          })
+        ? createWorkflowController(
+            activeWorkspaceRef.current
+              ? {
+                  ...config.workflow,
+                  root: activeWorkspaceRef.current.authorizedRoot,
+                }
+              : config.workflow,
+            toolContext,
+            {
+              onPhase: (phase) => setLiveReasoning(`workflow: ${phase}`),
+            },
+          )
         : undefined;
       const result = await runLoop({
         messages: [{ type: "user", content: request }],

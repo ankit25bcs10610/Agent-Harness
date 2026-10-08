@@ -1,6 +1,7 @@
 import z from "zod";
 import { listRepositoryFiles } from "../repository";
 import type { Tool } from "../types";
+import { workspaceRoot } from "../../workspace";
 
 export const listFiles: Tool<any, unknown> = {
   name: "list_files",
@@ -21,6 +22,9 @@ export const listFiles: Tool<any, unknown> = {
     explanation: `List repository files under: ${args.path ?? "."}`,
     risk: "normal",
   }),
-  execute: async (args: any, signal) =>
-    listRepositoryFiles({ root: args.path ?? process.cwd(), ...args }, signal),
+  execute: async (args: any, signal, context) =>
+    listRepositoryFiles(
+      { root: await workspaceRoot(context?.workspace, args.path), ...args },
+      signal,
+    ),
 };

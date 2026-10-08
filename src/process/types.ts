@@ -5,6 +5,7 @@ export type IsolationRequest = {
 
 export type ProcessRequest = {
   command: string;
+  workspaceRoot?: string;
   cwd?: string;
   env?: Record<string, string>;
   shell?: boolean;

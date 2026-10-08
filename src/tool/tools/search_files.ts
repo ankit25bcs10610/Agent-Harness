@@ -1,6 +1,7 @@
 import z from "zod";
 import { searchRepository } from "../repository";
 import type { Tool } from "../types";
+import { workspaceRoot } from "../../workspace";
 
 export const searchFiles: Tool<any, unknown> = {
   name: "search_files",
@@ -24,7 +25,7 @@ export const searchFiles: Tool<any, unknown> = {
     explanation: `Search repository text under ${args.path ?? "."}: ${args.query}`,
     risk: "normal",
   }),
-  execute: async (args: any, signal) => {
+  execute: async (args: any, signal, context) => {
     if (!args.regex)
       args.query = args.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     else {
@@ -38,7 +39,7 @@ export const searchFiles: Tool<any, unknown> = {
     }
     return searchRepository(
       args.query,
-      { root: args.path ?? process.cwd(), ...args },
+      { root: await workspaceRoot(context?.workspace, args.path), ...args },
       signal,
     );
   },

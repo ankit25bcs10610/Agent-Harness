@@ -33,6 +33,8 @@ export const PATHS = {
   skillsDir: `${CHIKU_DIR}/skills`,
   sessionsDir: `${CHIKU_DIR}/sessions`,
   contractsDir: `${CHIKU_DIR}/contracts`,
+  workspacesDir: `${CHIKU_DIR}/workspaces`,
+  workspaceLocksDir: `${CHIKU_DIR}/locks`,
 };
 
 // display only

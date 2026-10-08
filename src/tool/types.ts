@@ -1,5 +1,6 @@
 import type { z, ZodRawShape } from "zod";
 import type { Asker, PermissionKey, PermSession } from "../permission/types";
+import type { WorkspaceExecutionContext } from "../workspace/types";
 
 export type Tool<
   TParams extends ZodRawShape = ZodRawShape,
@@ -14,6 +15,7 @@ export type Tool<
   execute: (
     args: z.infer<z.ZodObject<TParams>>,
     signal: AbortSignal,
+    context?: ToolContext,
   ) => Promise<TResult>;
 };
 
@@ -22,4 +24,5 @@ export type ToolContext = {
   asker: Asker;
   signal: AbortSignal;
   maxOutputChars: number;
+  workspace?: WorkspaceExecutionContext;
 };

@@ -21,9 +21,12 @@ export const fileWrite: Tool<
     explanation: `Create file: ${path}`,
     risk: "normal",
   }),
-  execute: async ({ path, content }) => {
+  execute: async ({ path, content }, _signal, context) => {
     try {
-      const canonical = await canonicalizePath(path, process.cwd());
+      const canonical = await canonicalizePath(
+        path,
+        context?.workspace?.authorizedRoot ?? process.cwd(),
+      );
       if (canonical.exists) throw new Error(`File already exists: "${path}"`);
       await mkdir(dirname(canonical.target), { recursive: true });
       await writeFile(canonical.target, content, {

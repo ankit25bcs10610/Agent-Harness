@@ -1,4 +1,5 @@
 import z from "zod";
+import { join } from "node:path";
 import { applyPatch, undoPatch } from "../../patch/engine";
 import { loadContract, saveContract } from "../../contract/store";
 import { reviseContract } from "../../contract/types";
@@ -42,16 +43,22 @@ export const applyPatchTool: Tool<any, unknown> = {
         : `${args.dryRun ? "Preview" : "Apply"} a multi-file patch in the workspace`,
     risk: "high",
   }),
-  execute: async (args: any, signal) => {
+  execute: async (args: any, signal, context) => {
+    const workspaceRoot = context?.workspace?.authorizedRoot ?? process.cwd();
     if (args.mode === "undo") return undoPatch(args.undoToken, signal);
     let contract;
+    const contractDirectory = join(workspaceRoot, ".chiku", "contracts");
     if (args.contractId) {
-      contract = await loadContract(args.contractId);
+      contract = await loadContract(
+        args.contractId,
+        undefined,
+        contractDirectory,
+      );
       if (!contract)
         throw new Error(`change contract not found: ${args.contractId}`);
       const checks = await validateContractPreconditions(
         contract,
-        process.cwd(),
+        workspaceRoot,
       );
       const failed = checks.filter((check) => !check.passed);
       if (failed.length)
@@ -61,7 +68,7 @@ export const applyPatchTool: Tool<any, unknown> = {
       if (args.patch !== contract.proposedPatch)
         throw new Error("patch does not match the persisted change contract");
     }
-    const result = await applyPatch(process.cwd(), args.patch, {
+    const result = await applyPatch(workspaceRoot, args.patch, {
       dryRun: args.dryRun,
       signal,
     });
@@ -81,6 +88,7 @@ export const applyPatchTool: Tool<any, unknown> = {
               .map((file) => `applied:${file.path}`),
           ],
         }),
+        contractDirectory,
       );
     }
     return {

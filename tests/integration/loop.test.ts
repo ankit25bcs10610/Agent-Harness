@@ -123,4 +123,84 @@ describe("agent loop", () => {
       content: "[Request interrupted by user]",
     });
   });
+
+  test("emits lifecycle events and preserves tool-call relationships", async () => {
+    const events: string[] = [];
+    let calls = 0;
+    const result = await runLoop({
+      messages: [{ type: "user", content: "run" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async () =>
+        ++calls === 1 ? response("tool_calls") : response(),
+      config: config(),
+      ctx,
+      events: {
+        onEvent: (event) =>
+          events.push(event.type === "lifecycle" ? event.state : event.type),
+      },
+    });
+    expect(events).toContain("reasoning");
+    expect(events).toContain("tool_dispatch");
+    expect(events).toContain("execution");
+    expect(events.at(-1)).toBe("stopped");
+    expect(result.execution.toolCalls).toBe(1);
+    const assistantIndex = result.messages.findIndex(
+      (message) => message.type === "assistant",
+    );
+    const toolIndex = result.messages.findIndex(
+      (message) => message.type === "tool",
+    );
+    expect(assistantIndex).toBeLessThan(toolIndex);
+  });
+
+  test("recovers predictably by returning a checkpointable provider failure", async () => {
+    const checkpoints: unknown[] = [];
+    const result = await runLoop({
+      messages: [{ type: "user", content: "recover" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async () => {
+        throw new Error("temporary provider failure");
+      },
+      config: config(),
+      ctx,
+      checkpoint: async (state) => {
+        checkpoints.push(state);
+      },
+    });
+    expect(result.stopReason).toBe("provider_failure");
+    expect(checkpoints).toHaveLength(1);
+    expect(result.execution.modelRequests).toBe(1);
+  });
+
+  test("enforces a wall-clock budget before another model request", async () => {
+    const result = await runLoop({
+      messages: [{ type: "user", content: "slow" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return response("tool_calls");
+      },
+      config: config({ wallClockMs: 1 }),
+      ctx,
+    });
+    expect(result.stopReason).toBe("wall_clock");
+  });
+
+  test("does not dispatch an incomplete tool-call response", async () => {
+    const result = await runLoop({
+      messages: [{ type: "user", content: "bad tool" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async () => ({
+        message: { type: "assistant", content: null },
+        finishReason: "tool_calls",
+        stats: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      }),
+      config: config(),
+      ctx,
+    });
+    expect(result.stopReason).toBe("malformed_response");
+    expect(
+      result.messages.filter((message) => message.type === "tool"),
+    ).toHaveLength(0);
+  });
 });

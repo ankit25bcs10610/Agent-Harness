@@ -171,6 +171,10 @@ sequenceDiagram
 
 The loop can stop on provider stop/error/length/content-filter results, interruption, maximum iterations, or aggregate token budget. An interruption appends a marker for future continuation.
 
+Each turn exposes typed lifecycle events: `initializing`, `reasoning`, `tool_dispatch`, `permission_waiting`, `execution`, `verification`, `completion`, `cancellation`, and `failure`. The loop also reports model responses, tool-call/result pairs, checkpoints, and a final stop event. Iteration, token, and optional wall-clock budgets are checked before model work, before tool dispatch, and after tool execution. A checkpoint hook receives the complete resumable loop state without forcing a persistence implementation.
+
+Provider failures terminate the current turn with a typed recovery-oriented stop reason and a checkpointable state; they do not recursively restart the loop. Tool calls are dispatched only after a complete assistant response has been validated, and each tool result retains its original `toolCallId`. Unknown or malformed calls become a controlled failure instead of being inserted as unrelated messages.
+
 ## Technical architecture
 
 | Path              | Responsibility                                                                                         | Interaction                                                |

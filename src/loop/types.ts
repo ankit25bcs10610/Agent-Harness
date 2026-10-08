@@ -19,7 +19,28 @@ export interface LoopConfig {
   compactionModel: string;
   loopModel: string;
   transcriptCapChars: number;
+  wallClockMs?: number;
 }
+
+export type LifecycleState =
+  | "initializing"
+  | "reasoning"
+  | "tool_dispatch"
+  | "permission_waiting"
+  | "execution"
+  | "verification"
+  | "completion"
+  | "cancellation"
+  | "failure";
+
+export type AgentEvent =
+  | { type: "lifecycle"; state: LifecycleState; at: number }
+  | { type: "model_request"; model: string; attempt: number; at: number }
+  | { type: "model_response"; totalTokens: number; at: number }
+  | { type: "tool_call"; call: ToolCall; at: number }
+  | { type: "tool_result"; call: ToolCall; result: string; at: number }
+  | { type: "checkpoint"; at: number }
+  | { type: "stopped"; reason: StopReason; at: number };
 
 // loop input format
 export interface LoopInput {
@@ -29,6 +50,7 @@ export interface LoopInput {
   config: LoopConfig;
   ctx: ToolContext;
   events?: LoopEvents;
+  checkpoint?: CheckpointHook;
   state?: LoopState | undefined;
 }
 
@@ -39,7 +61,11 @@ export type StopReason =
   | "length"
   | "content_filter"
   | "interrupted"
-  | "max_tokens";
+  | "max_tokens"
+  | "wall_clock"
+  | "provider_failure"
+  | "malformed_response"
+  | "tool_failure";
 
 // loop output format
 export interface LoopOutput {
@@ -50,6 +76,16 @@ export interface LoopOutput {
   tokensUsed: number;
   lastMessageView: AgentMessage[];
   state: LoopState;
+  execution: ExecutionStats;
+}
+
+export interface ExecutionStats {
+  startedAt: number;
+  durationMs: number;
+  modelRequests: number;
+  toolCalls: number;
+  tokensUsed: number;
+  usageIncomplete: boolean;
 }
 
 export interface LoopEvents {
@@ -57,7 +93,11 @@ export interface LoopEvents {
   onReasoning?: (chunk: string) => void;
   onToolStart?: (call: ToolCall) => void;
   onToolResult?: (call: ToolCall, result: string) => void;
+  onPermissionWaiting?: () => void;
+  onEvent?: (event: AgentEvent) => void;
 }
+
+export type CheckpointHook = (state: LoopState) => void | Promise<void>;
 
 export interface LoopState {
   messages: AgentMessage[]; // raw history, no system prompt
@@ -65,4 +105,5 @@ export interface LoopState {
   summary: AgentMessage;
   summarizedUpTo: number;
   lastPromptTokens: number;
+  execution?: ExecutionStats;
 }

@@ -20,6 +20,7 @@ export async function dispatchTool(
       });
       continue;
     }
+    events?.onPermissionWaiting?.();
     if (events?.onToolStart) events.onToolStart(toolCall);
     const content = await runTool(toolCall.name, toolCall.arguments, ctx);
     toolResponse.push({

@@ -4,17 +4,23 @@ import type { AgentMessage } from "../provider";
 import { generateToolsArray } from "../tool";
 import { dispatchTool } from "./dispatch";
 import type { ToolContext } from "../tool/types";
-import type { LoopInput, LoopOutput, StopReason } from "./types";
+import type {
+  AgentEvent,
+  ExecutionStats,
+  LifecycleState,
+  LoopInput,
+  LoopOutput,
+  StopReason,
+} from "./types";
 
 function buildMsgView(
   summary: AgentMessage,
   summarizedUpTo: number,
   messages: AgentMessage[],
-): AgentMessage[] {
+) {
   return [summary, ...messages.slice(summarizedUpTo + 1)];
 }
 
-// tells the model its last turn was cut off, so the next message isn't misread
 const INTERRUPT_NOTE: AgentMessage = {
   type: "user",
   content: "[Request interrupted by user]",
@@ -23,66 +29,96 @@ const INTERRUPT_NOTE: AgentMessage = {
 export async function runLoop(input: LoopInput): Promise<LoopOutput> {
   const ctx: ToolContext = input.ctx;
   const cfg = input.config;
-  const state = input.state;
-
-  const messages: Array<AgentMessage> = [
-    ...(state?.messages ?? []),
-    ...input.messages,
-  ];
-  let lastMessageView: AgentMessage[] = [
-    ...(state?.view ?? []),
-    ...input.messages,
-  ];
-  let previousSummary: AgentMessage = state
-    ? state.summary
-    : { type: "assistant", content: "" };
-  let previousSummarizedUpTo = state ? state.summarizedUpTo : -1; // inclusive (index of last summarized msg)
-  let lastPromptTokens = state ? state.lastPromptTokens : 0;
+  const startedAt = Date.now();
+  const messages = [...(input.state?.messages ?? []), ...input.messages];
+  let lastMessageView = [...(input.state?.view ?? []), ...input.messages];
+  let previousSummary: AgentMessage = input.state?.summary ?? {
+    type: "assistant",
+    content: "",
+  };
+  let previousSummarizedUpTo = input.state?.summarizedUpTo ?? -1;
+  let lastPromptTokens = input.state?.lastPromptTokens ?? 0;
   let iterations = 0;
   let tokensUsed = 0;
+  let modelRequests = 0;
+  let toolCalls = 0;
+  let usageIncomplete = false;
+  let lifecycle: LifecycleState = "initializing";
 
-  const finish = (stopReason: StopReason): LoopOutput => {
+  const emit = (event: AgentEvent) => input.events?.onEvent?.(event);
+  const setLifecycle = (state: LifecycleState) => {
+    lifecycle = state;
+    emit({ type: "lifecycle", state, at: Date.now() });
+  };
+  const overWallClock = () =>
+    cfg.wallClockMs !== undefined && Date.now() - startedAt >= cfg.wallClockMs;
+  const execution = (): ExecutionStats => ({
+    startedAt,
+    durationMs: Date.now() - startedAt,
+    modelRequests,
+    toolCalls,
+    tokensUsed,
+    usageIncomplete,
+  });
+
+  const finish = async (stopReason: StopReason): Promise<LoopOutput> => {
     if (stopReason === "interrupted") {
+      setLifecycle("cancellation");
       messages.push(INTERRUPT_NOTE);
       lastMessageView.push(INTERRUPT_NOTE);
+    } else if (
+      ["provider_failure", "malformed_response", "tool_failure"].includes(
+        stopReason,
+      )
+    )
+      setLifecycle("failure");
+    else setLifecycle("completion");
+    const state = {
+      messages,
+      view: lastMessageView,
+      summary: previousSummary,
+      summarizedUpTo: previousSummarizedUpTo,
+      lastPromptTokens,
+      execution: execution(),
+    };
+    if (input.checkpoint) {
+      await input.checkpoint(state);
+      emit({ type: "checkpoint", at: Date.now() });
     }
+    emit({ type: "stopped", reason: stopReason, at: Date.now() });
     return {
       messages,
       stopReason,
       iterations,
       lastPromptTokens,
-      lastMessageView,
       tokensUsed,
-      state: {
-        messages,
-        view: lastMessageView,
-        summary: previousSummary,
-        summarizedUpTo: previousSummarizedUpTo,
-        lastPromptTokens,
-      },
+      lastMessageView,
+      state,
+      execution: execution(),
     };
   };
 
-  while (true) {
-    if (ctx.signal.aborted) {
-      return finish("interrupted");
-    }
-    if (iterations >= input.config.maxIterations) {
-      return finish("max_iterations");
-    }
-
-    // prune past pruneRatio of the context window
-    if (lastPromptTokens >= cfg.contextWindow * cfg.pruneRatio) {
-      lastMessageView = prune(
-        lastMessageView,
-        cfg.contextWindow,
-        cfg.maxPruneAllowanceRatio,
-      );
-    }
-
-    // compact past compactionRatio of the context window
-    if (lastPromptTokens >= cfg.contextWindow * cfg.compactionRatio) {
-      try {
+  try {
+    const dispatchEvents = {
+      ...input.events,
+      onPermissionWaiting: () => {
+        setLifecycle("permission_waiting");
+        input.events?.onPermissionWaiting?.();
+      },
+    };
+    setLifecycle("reasoning");
+    while (true) {
+      if (ctx.signal.aborted) return finish("interrupted");
+      if (overWallClock()) return finish("wall_clock");
+      if (iterations >= cfg.maxIterations) return finish("max_iterations");
+      if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
+      if (lastPromptTokens >= cfg.contextWindow * cfg.pruneRatio)
+        lastMessageView = prune(
+          lastMessageView,
+          cfg.contextWindow,
+          cfg.maxPruneAllowanceRatio,
+        );
+      if (lastPromptTokens >= cfg.contextWindow * cfg.compactionRatio) {
         const summaryResult = await compact(
           previousSummary,
           previousSummarizedUpTo,
@@ -95,72 +131,95 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
         if (summaryResult) {
           const [summary, summarizedUpTo, compactionTokensUsed] = summaryResult;
           lastMessageView = buildMsgView(summary, summarizedUpTo, messages);
-
           previousSummary = summary;
           previousSummarizedUpTo = summarizedUpTo;
-
           tokensUsed += compactionTokensUsed;
+          if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
         }
-      } catch (error) {
-        if (ctx.signal.aborted) return finish("interrupted");
-        throw error;
       }
-    }
-
-    let completion;
-    try {
-      completion = await input.complete(
-        [input.systemPrompt, ...lastMessageView],
-        generateToolsArray(),
-        ctx.signal,
-        input.config.loopModel,
-        input.events,
-      );
-    } catch (error) {
-      if (ctx.signal.aborted) return finish("interrupted");
-      throw error;
-    }
-
-    tokensUsed += completion.stats.totalTokens;
-    lastPromptTokens = completion.stats.promptTokens;
-
-    // console.log(messages);
-    //  console.dir(lastMessageView, { depth: null });
-    //  console.log(
-    //    "Context %: ",
-    //    (lastPromptTokens / input.config.contextWindow) * 100,
-    //  );
-    messages.push(completion.message);
-    lastMessageView.push(completion.message);
-
-    const finishReason = completion.finishReason;
-
-    if (finishReason === "tool_calls") {
-      if (completion.message.toolCalls) {
-        const toolCallResults = await dispatchTool(
-          completion.message.toolCalls,
-          ctx,
+      if (overWallClock()) return finish("wall_clock");
+      setLifecycle("reasoning");
+      modelRequests++;
+      emit({
+        type: "model_request",
+        model: cfg.loopModel,
+        attempt: modelRequests,
+        at: Date.now(),
+      });
+      let completion;
+      try {
+        completion = await input.complete(
+          [input.systemPrompt, ...lastMessageView],
+          generateToolsArray(),
+          ctx.signal,
+          cfg.loopModel,
           input.events,
         );
-        for (const result of toolCallResults) {
+      } catch (error) {
+        if (ctx.signal.aborted) return finish("interrupted");
+        const code =
+          typeof error === "object" && error && "code" in error
+            ? error.code
+            : undefined;
+        return finish(
+          code === "malformed_response" || code === "incomplete_response"
+            ? "malformed_response"
+            : "provider_failure",
+        );
+      }
+      tokensUsed += completion.stats.totalTokens;
+      lastPromptTokens = completion.stats.promptTokens;
+      usageIncomplete ||= completion.stats.usageComplete === false;
+      emit({
+        type: "model_response",
+        totalTokens: completion.stats.totalTokens,
+        at: Date.now(),
+      });
+      messages.push(completion.message);
+      lastMessageView.push(completion.message);
+      if (tokensUsed >= cfg.maxTokens) return finish("max_tokens");
+      if (overWallClock()) return finish("wall_clock");
+      if (completion.finishReason === "tool_calls") {
+        const calls = completion.message.toolCalls;
+        if (!calls?.length) return finish("malformed_response");
+        setLifecycle("tool_dispatch");
+        toolCalls += calls.length;
+        for (const call of calls)
+          emit({ type: "tool_call", call, at: Date.now() });
+        setLifecycle("execution");
+        const results = await dispatchTool(calls, ctx, dispatchEvents);
+        setLifecycle("verification");
+        for (const result of results) {
           messages.push(result);
           lastMessageView.push(result);
+          const call = calls.find(
+            (item) => item.toolCallId === result.toolCallId,
+          );
+          if (call)
+            emit({
+              type: "tool_result",
+              call,
+              result: result.content,
+              at: Date.now(),
+            });
         }
-      } else {
-        return finish("error");
-        // TODO: add a callback func to handle interrupts
+        if (ctx.signal.aborted) return finish("interrupted");
+        if (overWallClock()) return finish("wall_clock");
+        iterations++;
+        continue;
       }
-    } else if (
-      finishReason === "error" ||
-      finishReason === "stop" ||
-      finishReason === "length" ||
-      finishReason === "content_filter"
-    ) {
-      return finish(finishReason);
+      if (completion.finishReason === "error")
+        return finish("provider_failure");
+      if (completion.finishReason === "stop") return finish("stop");
+      if (completion.finishReason === "length") return finish("length");
+      if (completion.finishReason === "content_filter")
+        return finish("content_filter");
+      return finish("malformed_response");
     }
-    if (tokensUsed > input.config.maxTokens) {
-      return finish("max_tokens");
-    }
-    iterations++;
+  } catch (error) {
+    if (ctx.signal.aborted) return finish("interrupted");
+    return finish("tool_failure");
+  } finally {
+    void lifecycle;
   }
 }

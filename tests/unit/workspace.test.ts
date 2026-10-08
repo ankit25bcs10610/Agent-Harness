@@ -21,7 +21,7 @@ let root = "";
 function portablePath(value: string) {
   return value
     .replaceAll("\\", "/")
-    .replace(/^\/(\w)\//, "$1:/")
+    .replace(/\/(\w)\//g, "$1:/")
     .toLowerCase();
 }
 afterEach(async () => {

@@ -5,6 +5,11 @@ import type {
   ToolCall,
 } from "../provider/types";
 import type { ToolContext } from "../tool/types";
+import type {
+  VerificationReport,
+  WorkflowController,
+  WorkflowPolicy,
+} from "../workflow/types";
 
 // dependency injecting interfaces for loop
 
@@ -20,6 +25,7 @@ export interface LoopConfig {
   loopModel: string;
   transcriptCapChars: number;
   wallClockMs?: number;
+  workflow?: WorkflowPolicy;
 }
 
 export type LifecycleState =
@@ -52,6 +58,7 @@ export interface LoopInput {
   events?: LoopEvents;
   checkpoint?: CheckpointHook;
   state?: LoopState | undefined;
+  workflow?: WorkflowController;
 }
 
 export type StopReason =
@@ -65,7 +72,8 @@ export type StopReason =
   | "wall_clock"
   | "provider_failure"
   | "malformed_response"
-  | "tool_failure";
+  | "tool_failure"
+  | "verification_failed";
 
 // loop output format
 export interface LoopOutput {
@@ -77,6 +85,7 @@ export interface LoopOutput {
   lastMessageView: AgentMessage[];
   state: LoopState;
   execution: ExecutionStats;
+  verification?: VerificationReport;
 }
 
 export interface ExecutionStats {

@@ -175,6 +175,12 @@ Each turn exposes typed lifecycle events: `initializing`, `reasoning`, `tool_dis
 
 Provider failures terminate the current turn with a typed recovery-oriented stop reason and a checkpointable state; they do not recursively restart the loop. Tool calls are dispatched only after a complete assistant response has been validated, and each tool result retains its original `toolCallId`. Unknown or malformed calls become a controlled failure instead of being inserted as unrelated messages.
 
+### Verification-oriented task workflow
+
+When enabled by `LoopConfig.workflow`, the runtime emits a bounded workflow sequence: task intake, repository inspection, proposed changes, permission evaluation, patch execution, verification, failure analysis, bounded repair, and final evidence. Verification discovers only declared `typecheck`, `lint`, `test`, and `build` package scripts, executes each through the central command permission policy, and records stdout, stderr, exit code, duration, and pass/fail/untested status. A repair hook is injected by the caller and is capped by `maxRepairAttempts`; the loop never recursively asks the model to repair itself.
+
+The final report distinguishes successful checks from checks that were unavailable or unauthorized. A normal agent stop becomes `verification_failed` when discovered checks fail, so the terminal cannot report an unverified success. No supported scripts means the report remains incomplete rather than claiming that behavior was tested.
+
 ### Session recovery
 
 Sessions are versioned JSON records with stable UUIDs, names, titles, lifecycle status, stop reason, loop messages, tool-call IDs/results, and execution statistics. `listSessions`, `loadSession`, `createNamedSession`, `deleteSession`, and `cleanupSessions` provide a future session-picker boundary. Writes use a temporary file followed by rename; a valid orphaned `.json.tmp` is recovered only when its final JSON file is absent, while existing sessions are never silently deleted.

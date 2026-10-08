@@ -10,6 +10,13 @@ export const CONFIG: LoopConfig = {
   loopModel: "openai/gpt-4o",
   compactionModel: "openrouter/free",
   transcriptCapChars: 2000,
+  workflow: {
+    root: process.cwd(),
+    maxRepairAttempts: 1,
+    commandTimeoutMs: 120_000,
+    maxOutputChars: 20_000,
+    enabled: true,
+  },
 };
 
 export const TOOLS = {

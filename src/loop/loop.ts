@@ -68,16 +68,25 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     lastPromptTokens,
     execution: execution(),
   });
+  let verificationReport;
 
   const finish = async (stopReason: StopReason): Promise<LoopOutput> => {
-    if (stopReason === "interrupted") {
+    verificationReport = await input.workflow?.finalize(stopReason, ctx.signal);
+    const finalReason: StopReason =
+      verificationReport && stopReason === "stop" && !verificationReport.passed
+        ? "verification_failed"
+        : stopReason;
+    if (finalReason === "interrupted") {
       setLifecycle("cancellation");
       messages.push(INTERRUPT_NOTE);
       lastMessageView.push(INTERRUPT_NOTE);
     } else if (
-      ["provider_failure", "malformed_response", "tool_failure"].includes(
-        stopReason,
-      )
+      [
+        "provider_failure",
+        "malformed_response",
+        "tool_failure",
+        "verification_failed",
+      ].includes(finalReason)
     )
       setLifecycle("failure");
     else setLifecycle("completion");
@@ -86,16 +95,17 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
       await input.checkpoint(state);
       emit({ type: "checkpoint", at: Date.now() });
     }
-    emit({ type: "stopped", reason: stopReason, at: Date.now() });
+    emit({ type: "stopped", reason: finalReason, at: Date.now() });
     return {
       messages,
-      stopReason,
+      stopReason: finalReason,
       iterations,
       lastPromptTokens,
       tokensUsed,
       lastMessageView,
       state,
       execution: execution(),
+      ...(verificationReport ? { verification: verificationReport } : {}),
     };
   };
 
@@ -185,8 +195,10 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
         if (!calls?.length) return finish("malformed_response");
         setLifecycle("tool_dispatch");
         toolCalls += calls.length;
-        for (const call of calls)
+        for (const call of calls) {
           emit({ type: "tool_call", call, at: Date.now() });
+          input.workflow?.recordToolCall(call);
+        }
         setLifecycle("execution");
         const results = await dispatchTool(calls, ctx, dispatchEvents);
         setLifecycle("verification");

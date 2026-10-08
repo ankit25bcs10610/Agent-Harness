@@ -18,6 +18,7 @@ import { messagesToItems } from "./history";
 import { TOOLS, UI } from "../config";
 import type { LoopConfig } from "../loop/types";
 import { StatusBar } from "./StatusBar";
+import { createWorkflowController } from "../workflow/verify";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -146,18 +147,24 @@ export function App({ systemPrompt, session, config }: Props) {
     setRunning(true);
 
     try {
+      const toolContext = {
+        asker,
+        signal: controller.signal,
+        maxOutputChars: TOOLS.maxOutputChars,
+        permissions,
+      };
+      const workflow = config.workflow
+        ? createWorkflowController(config.workflow, toolContext, {
+            onPhase: (phase) => setLiveReasoning(`workflow: ${phase}`),
+          })
+        : undefined;
       const result = await runLoop({
         messages: [{ type: "user", content: request }],
         state: sessionRef.current.state,
         complete: completeStream,
         systemPrompt,
         config,
-        ctx: {
-          asker,
-          signal: controller.signal,
-          maxOutputChars: TOOLS.maxOutputChars,
-          permissions,
-        },
+        ctx: toolContext,
         events: {
           onText: (c) => {
             liveRef.current += c;
@@ -187,6 +194,7 @@ export function App({ systemPrompt, session, config }: Props) {
           sessionRef.current.updatedAt = Date.now().toString();
           await saveSession(sessionRef.current);
         },
+        ...(workflow ? { workflow } : {}),
       });
 
       sessionRef.current.state = result.state;
@@ -212,6 +220,12 @@ export function App({ systemPrompt, session, config }: Props) {
 
       if (result.stopReason !== "stop") {
         push("error", `stopped: ${result.stopReason}`);
+      }
+      if (result.verification && !result.verification.passed) {
+        push(
+          "error",
+          `verification incomplete: ${result.verification.checks.map((check) => `${check.name}:${check.status}`).join(", ")}`,
+        );
       }
     } catch (e) {
       push("error", e instanceof Error ? e.message : String(e));

@@ -34,6 +34,7 @@
     "dev": "bun src/index.tsx",
     "watch": "bun --watch src/index.tsx",
     "typecheck": "tsc --noEmit",
+    "format:ci": "prettier --check tests .github/workflows/ci.yml package.json",
     "build": "bun scripts/build-cli.ts",
     "build:binary": "bun scripts/build-binary.ts",
     "package:check": "npm pack --dry-run",

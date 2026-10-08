@@ -32,7 +32,7 @@ jobs:
         run: bun run typecheck
 
       - name: Formatting
-        run: bunx prettier --check tests .github/workflows/ci.yml package.json
+        run: bun run format:ci
 
       - name: Tests
         run: bun run test

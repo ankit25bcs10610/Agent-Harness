@@ -26,6 +26,14 @@ test("complex syntax requires explicit shell mode", async () => {
   expect(result.stderr).toContain("shell: true");
 });
 
+test("quoted shell escapes require explicit shell mode", async () => {
+  const result = await new ProcessExecutor().run({
+    command: 'grep -n "architecture\\|loop" README.md',
+  });
+  expect(result.failure).toBe("spawn");
+  expect(result.stderr).toContain("shell: true");
+});
+
 test("timeout terminates a process and reports the timeout", async () => {
   const result = await new ProcessExecutor().run({
     command: nodeArgs("setTimeout(() => {}, 10000)"),

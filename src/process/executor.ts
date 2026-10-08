@@ -22,6 +22,12 @@ function containsShellSyntax(command: string): boolean {
       escaping = false;
       continue;
     }
+    if (char === "\\" && quote === '"') {
+      // Direct argument splitting cannot preserve shell-escaped regex
+      // operators such as `\\|` inside a quoted grep pattern. Require the
+      // caller to opt into shell mode so the command's meaning is explicit.
+      return true;
+    }
     if (char === "\\" && quote !== "'") {
       escaping = true;
       continue;

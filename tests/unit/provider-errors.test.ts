@@ -5,6 +5,7 @@ import {
   redactProviderSecrets,
 } from "../../src/provider/errors";
 import { withProviderRetry } from "../../src/provider/retry";
+import { getClient } from "../../src/provider/client";
 
 test("classifies rate limits and parses Retry-After", () => {
   const error = classifyProviderError({
@@ -88,4 +89,15 @@ test("redacts provider secrets from structured logs", () => {
     authorization: "[REDACTED]",
     apiKey: "[REDACTED]",
   });
+});
+
+test("missing provider credentials fail at request time with actionable guidance", () => {
+  const previous = process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
+  try {
+    expect(() => getClient()).toThrow("OPENROUTER_API_KEY");
+  } finally {
+    if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previous;
+  }
 });

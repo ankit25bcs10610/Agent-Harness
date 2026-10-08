@@ -1,4 +1,4 @@
-import { client } from "./client";
+import { getClient } from "./client";
 import { normalize, normalizeStream, toSdkMsg, toSdkTool } from "./normalize";
 import type {
   AgentMessage,
@@ -74,8 +74,8 @@ export const complete: CompleteFunc = async (
       signal,
       options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     );
-    return client.chat
-      .send(
+    return getClient()
+      .chat.send(
         {
           chatRequest: {
             model,
@@ -138,7 +138,7 @@ export const completeStream: CompleteStreamFunc = async (
         try {
           let stream;
           try {
-            stream = await client.chat.send(
+            stream = await getClient().chat.send(
               {
                 chatRequest: {
                   model,

@@ -2,6 +2,7 @@ import { existsSync, accessSync, constants, readFileSync } from "node:fs";
 import { homedir, platform, release } from "node:os";
 import { join, resolve } from "node:path";
 import { loadCliConfig } from "./cli-config";
+import { CONFIG } from "./config";
 
 export type CliOptions = {
   command: "run" | "help" | "version" | "doctor";
@@ -132,6 +133,52 @@ export function diagnostics(workspace = process.cwd()) {
   return checks;
 }
 
+export type ProviderDiagnosticStatus =
+  "AVAILABLE" | "CONFIGURATION_REQUIRED" | "UNREACHABLE" | "UNSUPPORTED";
+
+export async function diagnoseProvider(
+  model = process.env.CHIKU_MODEL ?? CONFIG.loopModel,
+  fetchImpl: (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response> = fetch,
+) {
+  if (!process.env.OPENROUTER_API_KEY)
+    return {
+      name: "provider",
+      status: "CONFIGURATION_REQUIRED" as const,
+      detail: "OPENROUTER_API_KEY is not configured",
+    };
+  try {
+    const response = await fetchImpl("https://openrouter.ai/api/v1/models", {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok)
+      return {
+        name: "provider",
+        status: "UNREACHABLE" as const,
+        detail: `OpenRouter model discovery returned HTTP ${response.status}`,
+      };
+    const body = (await response.json()) as {
+      data?: Array<{ id?: unknown }>;
+    };
+    const supported = body.data?.some((entry) => entry.id === model) ?? false;
+    return {
+      name: "provider",
+      status: supported ? ("AVAILABLE" as const) : ("UNSUPPORTED" as const),
+      detail: supported
+        ? `${model} is listed by OpenRouter`
+        : `${model} is not listed by OpenRouter`,
+    };
+  } catch (error) {
+    return {
+      name: "provider",
+      status: "UNREACHABLE" as const,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function canWrite(path: string): boolean {
   try {
     accessSync(path, constants.W_OK);
@@ -162,13 +209,13 @@ export async function main(args = process.argv.slice(2)) {
     return 0;
   }
   if (options.command === "doctor") {
-    for (const check of diagnostics(options.workspace))
+    const checks = [
+      ...diagnostics(options.workspace),
+      await diagnoseProvider(),
+    ];
+    for (const check of checks)
       console.log(`${check.status.padEnd(7)} ${check.name}: ${check.detail}`);
-    return diagnostics(options.workspace).some(
-      (check) => check.status === "FAIL",
-    )
-      ? 1
-      : 0;
+    return checks.some((check) => check.status === "FAIL") ? 1 : 0;
   }
   if (options.workspace) {
     if (!existsSync(options.workspace)) {

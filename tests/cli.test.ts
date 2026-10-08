@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { helpText, parseArgs } from "../src/cli";
+import { diagnoseProvider, helpText, parseArgs } from "../src/cli";
 import { loadCliConfig } from "../src/cli-config";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -40,4 +40,30 @@ test("configuration loads from an explicit file without persisting credentials",
   const config = await loadCliConfig(path);
   expect(config).toEqual({ model: "local/model", provider: "ollama" });
   await rm(directory, { recursive: true, force: true });
+});
+
+test("provider diagnostics distinguish configured model availability", async () => {
+  const previous = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "test-only";
+  try {
+    const available = await diagnoseProvider(
+      "openai/gpt-4o",
+      async () =>
+        new Response(JSON.stringify({ data: [{ id: "openai/gpt-4o" }] }), {
+          status: 200,
+        }),
+    );
+    expect(available.status).toBe("AVAILABLE");
+    const unsupported = await diagnoseProvider(
+      "missing/model",
+      async () =>
+        new Response(JSON.stringify({ data: [{ id: "openai/gpt-4o" }] }), {
+          status: 200,
+        }),
+    );
+    expect(unsupported.status).toBe("UNSUPPORTED");
+  } finally {
+    if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previous;
+  }
 });

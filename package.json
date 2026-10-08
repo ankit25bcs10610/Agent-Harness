@@ -13,14 +13,16 @@
     "watch": "bun --watch src/index.tsx",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "benchmark:intelligence": "bun scripts/benchmark-intelligence.ts"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/react": "^19.3.0",
+    "@typescript-eslint/typescript-estree": "^8.71.1",
     "bun-types": "^1.4.2",
     "prettier": "3.9.6",
-    "typescript": "^7.0.2"
+    "typescript": "5.9.3"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.2.66",

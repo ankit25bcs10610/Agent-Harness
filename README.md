@@ -481,3 +481,29 @@ The first two planned items are recorded in [TODO.md](TODO.md).
 Chiku is distributed under the [MIT License](LICENSE).
 
 Maintained by **Ankit Pandey**. See the [Agent-Harness repository](https://github.com/ankit25bcs10610/Agent-Harness).
+
+## Repository intelligence
+
+Chiku can build a local, permission-gated repository index for TypeScript and JavaScript projects. The index records file hashes, parsed symbols, and observed relative imports; it never executes repository code or sends source to a model. Indexes are stored atomically under `.chiku/` and should remain uncommitted.
+
+Available agent tools include `repo_overview`, `index_status`, `rebuild_index`, `find_symbol`, `find_dependencies`, `find_dependents`, `retrieve_code_context`, and `analyze_change_impact`. Traversals are bounded, cancellation-aware, and only report relationships supported by parsed source.
+
+The parser currently provides structural symbols for TypeScript and JavaScript. Other recognized files may be scanned as repository metadata, but are not presented as parsed symbols. Dependency resolution is intentionally conservative and only resolves relative imports whose target exists in the indexed file set.
+
+```mermaid
+flowchart LR
+  A[Workspace] --> B[Safe scanner]
+  B --> C[File hashes and metadata]
+  B --> D[TypeScript/JavaScript AST parser]
+  D --> E[Symbols and imports]
+  C --> F[Versioned local index]
+  E --> F
+  F --> G[Bounded graph queries]
+  F --> H[Task-aware retrieval]
+  G --> I[Agent tools]
+  H --> I
+```
+
+The index watcher debounces filesystem events and atomically replaces the local index. Watchers are opt-in and report added, modified, and deleted paths through the callback. Unsupported languages remain metadata-only until a dedicated parser is added; source files are never executed during indexing.
+
+Run the reproducible local benchmark with `bun run benchmark:intelligence`. Set `CHIKU_BENCHMARK_FILES` to change fixture size. The benchmark reports measured index-build and retrieval latency; it does not claim performance against external systems.

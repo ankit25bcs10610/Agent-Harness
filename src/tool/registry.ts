@@ -13,6 +13,16 @@ import { applyPatchTool } from "./tools/apply_patch";
 import { truncateStrings } from "./truncate_tool";
 import type { Tool, ToolContext } from "./types";
 import z from "zod";
+import {
+  repoOverview,
+  indexStatus,
+  rebuildIndex,
+  findSymbol,
+  findDependenciesTool,
+  findDependentsTool,
+  retrieveCodeContext,
+  analyzeChangeImpact,
+} from "./tools/repo_intelligence";
 
 const tools: Tool<any, unknown>[] = [
   bashTool,
@@ -24,6 +34,11 @@ const tools: Tool<any, unknown>[] = [
   searchFiles,
   searchSymbols,
   applyPatchTool,
+  repoOverview,
+  findSymbol,
+  findDependenciesTool,
+  findDependentsTool,
+  retrieveCodeContext,
 ];
 
 export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(

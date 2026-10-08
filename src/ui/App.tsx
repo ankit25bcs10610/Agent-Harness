@@ -19,6 +19,7 @@ import { TOOLS, UI } from "../config";
 import type { LoopConfig } from "../loop/types";
 import { StatusBar } from "./StatusBar";
 import { createWorkflowController } from "../workflow/verify";
+import { runTool } from "../tool/registry";
 import type { ContextDiagnostics } from "../context/types";
 
 const permissions: PermSession = {
@@ -60,6 +61,11 @@ const COMMANDS: Record<string, string> = {
     "Review the current diff, propose a concise commit message, and create a commit only after explicit approval.",
   "/deploy":
     "Inspect the deployment configuration and explain the deployment steps. Do not deploy without explicit approval.",
+  "/index":
+    "Rebuild the repository intelligence index and report indexed files, symbols, and errors.",
+  "/repo": "Show a concise repository intelligence overview.",
+  "/symbols": "Find important repository symbols relevant to the request.",
+  "/impact": "Analyze likely dependent files affected by the current changes.",
 };
 
 function resolveCommand(text: string): string {
@@ -148,6 +154,38 @@ export function App({ systemPrompt, session, config }: Props) {
     setLiveText("");
     setLiveReasoning("");
     setRunning(true);
+
+    const localTools: Record<string, string> = {
+      "/index": "rebuild_index",
+      "/repo": "repo_overview",
+      "/symbols": "retrieve_code_context",
+      "/impact": "analyze_change_impact",
+    };
+    const localCommand = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+    if (localCommand && localTools[localCommand]) {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const args =
+          localCommand === "/symbols"
+            ? JSON.stringify({ query: remainder || "repository" })
+            : localCommand === "/impact"
+              ? remainder
+                ? JSON.stringify({ paths: remainder.split(/\s+/) })
+                : JSON.stringify({ paths: [] })
+              : "{}";
+        const result = await runTool(localTools[localCommand], args, {
+          asker,
+          signal: controller.signal,
+          maxOutputChars: TOOLS.maxOutputChars,
+          permissions,
+        });
+        push("assistant", result);
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
 
     try {
       const toolContext = {

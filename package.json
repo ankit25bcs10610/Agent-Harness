@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "AI harness from scratch",
   "license": "MIT",
-  "author": "Rahul Joshi",
+  "author": "Ankit Pandey",
   "type": "module",
   "main": "index.js",
   "scripts": {

@@ -1,13 +1,33 @@
-export type PermKey = {
-  kind: "command" | "path" | "edit";
-  value: string;
+export type Capability =
+  "read" | "create" | "modify" | "delete" | "execute" | "external";
+
+export type PermissionDecision = "allow" | "deny" | "ask";
+
+export type PermissionKey = {
+  capability: Capability;
+  target: string;
+  explanation: string;
+  risk: "normal" | "high";
 };
 
-export type PermDecision = "allowed" | "ask" | "always-ask";
+export type PermissionGrant = {
+  capability: Capability;
+  scope: "exact" | "prefix";
+  target: string;
+};
+
+export type PermissionAuditEvent = {
+  at: string;
+  capability: Capability;
+  target: string;
+  decision: PermissionDecision | UserDecision;
+  reason: string;
+};
 
 export type PermSession = {
-  allowList: RegExp[];
   projectRoot: string;
+  grants: PermissionGrant[];
+  audit: PermissionAuditEvent[];
 };
 
 export type Allowed = { ok: true } | { ok: false; reason: string };
@@ -16,6 +36,6 @@ export type UserDecision =
   "allow-once" | "allow-always-exact" | "allow-always-prefix" | "deny";
 
 export type Asker = (
-  key: PermKey,
-  decision: "ask" | "always-ask",
+  key: PermissionKey,
+  decision: PermissionDecision,
 ) => Promise<UserDecision>;

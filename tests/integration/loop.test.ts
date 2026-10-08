@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { runLoop } from "../../src/loop/loop";
 import type { ProviderResponse } from "../../src/provider/types";
+import type { PermissionGrant } from "../../src/permission/types";
 
 const config = (overrides = {}) => ({
   maxIterations: 3,
@@ -16,7 +17,17 @@ const config = (overrides = {}) => ({
 });
 
 const ctx = {
-  permissions: { projectRoot: process.cwd(), allowList: [/^echo /] },
+  permissions: {
+    projectRoot: process.cwd(),
+    grants: [
+      {
+        capability: "execute",
+        scope: "prefix",
+        target: "echo",
+      } as PermissionGrant,
+    ],
+    audit: [],
+  },
   asker: async () => "allow-once" as const,
   signal: new AbortController().signal,
   maxOutputChars: 2000,

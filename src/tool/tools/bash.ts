@@ -13,7 +13,12 @@ export const bashTool: Tool<
   parameters: z.object({
     command: z.string().describe("single non-interactive shell command to run"),
   }),
-  getPermissionKey: ({ command }) => ({ kind: "command", value: command }),
+  getPermissionKey: ({ command }) => ({
+    capability: "execute",
+    target: command,
+    explanation: `Run shell command: ${command}`,
+    risk: "high",
+  }),
   execute: async ({ command }, signal) => {
     try {
       const execAsync = promisify(exec);

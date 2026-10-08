@@ -34,20 +34,20 @@ The current runtime connects to OpenRouter, renders through React and Ink, and e
 
 ## Core features
 
-| Capability             | Description                                                                    | Implementation                                 |
-| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
-| Agent loop             | Iterates model and tool calls until a stop condition, interruption, or budget. | `src/loop/loop.ts`                             |
-| Streaming              | Streams assistant text and reasoning updates.                                  | `src/provider/complete.ts`, `src/ui/App.tsx`   |
-| Tool calling           | Dispatches validated and permissioned model calls.                             | `src/loop/dispatch.ts`, `src/tool/registry.ts` |
-| Five built-in tools    | `bash`, `read_file`, `write_file`, `str_replace`, `load_skill`.                | `src/tool/tools/`                              |
-| OpenRouter integration | SDK client, normalization, streaming, usage, and model discovery.              | `src/provider/`                                |
-| Context engineering    | Pruning and model-assisted compaction.                                         | `src/context/`                                 |
-| Sessions               | Atomic local JSON persistence and latest-session resume.                       | `src/session/`                                 |
-| Skills                 | Markdown skill discovery and on-demand loading.                                | `.chiku/skills/`                               |
-| Permissions            | Command, path, and edit checks with approval prompts.                          | `src/permission/`                              |
-| Terminal UI            | Ink components, Markdown, status, history, and prompts.                        | `src/ui/`                                      |
-| Workflow shortcuts     | Slash commands for common developer workflows.                                 | `src/ui/App.tsx`                               |
-| Budgets                | Iteration and aggregate loop-token limits.                                     | `src/config.ts`                                |
+| Capability             | Description                                                                                        | Implementation                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Agent loop             | Iterates model and tool calls until a stop condition, interruption, or budget.                     | `src/loop/loop.ts`                             |
+| Streaming              | Streams assistant text and reasoning updates.                                                      | `src/provider/complete.ts`, `src/ui/App.tsx`   |
+| Tool calling           | Dispatches validated and permissioned model calls.                                                 | `src/loop/dispatch.ts`, `src/tool/registry.ts` |
+| Five built-in tools    | `bash`, `read_file`, `write_file`, `str_replace`, `load_skill`.                                    | `src/tool/tools/`                              |
+| OpenRouter integration | SDK client, normalization, streaming, usage, and model discovery.                                  | `src/provider/`                                |
+| Context engineering    | Pruning and model-assisted compaction.                                                             | `src/context/`                                 |
+| Sessions               | Atomic local JSON persistence and latest-session resume.                                           | `src/session/`                                 |
+| Skills                 | Markdown skill discovery and on-demand loading.                                                    | `.chiku/skills/`                               |
+| Permissions            | Capability-scoped command/file authorization, canonical paths, audit events, and approval prompts. | `src/permission/`                              |
+| Terminal UI            | Ink components, Markdown, status, history, and prompts.                                            | `src/ui/`                                      |
+| Workflow shortcuts     | Slash commands for common developer workflows.                                                     | `src/ui/App.tsx`                               |
+| Budgets                | Iteration and aggregate loop-token limits.                                                         | `src/config.ts`                                |
 
 ## Quick start
 
@@ -192,10 +192,10 @@ Only OpenRouter is implemented as a provider today. The provider types and norma
 | Tool          | Arguments                          | Behavior                                                                              | Permission model                                                       |
 | ------------- | ---------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `bash`        | `command: string`                  | Runs a non-interactive command with Node `child_process.exec`; returns stdout/stderr. | Command checks; unsafe syntax and high-risk patterns require approval. |
-| `read_file`   | `path`, optional `offset`, `limit` | Reads bounded text lines; default limit is 2,000.                                     | No interactive permission check currently.                             |
-| `write_file`  | `path`, `content`                  | Creates parent directories and a new file; refuses overwrite.                         | Uses a `path` permission key.                                          |
-| `str_replace` | `path`, `oldString`, `newString`   | Replaces exactly one occurrence; fails on zero or multiple matches.                   | Uses an `edit` key and project-root checks.                            |
-| `load_skill`  | `skillName: string`                | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.            | No interactive permission check currently.                             |
+| `read_file`   | `path`, optional `offset`, `limit` | Reads bounded text lines; default limit is 2,000.                                     | Capability `read`; hidden paths ask and sensitive paths deny.          |
+| `write_file`  | `path`, `content`                  | Creates parent directories and a new file; refuses overwrite.                         | Capability `create`; canonical workspace path required.                |
+| `str_replace` | `path`, `oldString`, `newString`   | Replaces exactly one occurrence; fails on zero or multiple matches.                   | Capability `modify`; canonical path and symlink re-check.              |
+| `load_skill`  | `skillName: string`                | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.            | Local skill capability has no external access.                         |
 
 Arguments are parsed as JSON and validated with Zod. Validation and execution failures return error text to the model. Tool result fields are truncated by `TOOLS.maxOutputChars`.
 
@@ -205,21 +205,26 @@ Arguments are parsed as JSON and validated with Zod. Validation and execution fa
 flowchart TD
     CALL[Tool call] --> KEY{Permission key?}
     KEY -->|none| RUN[Execute]
-    KEY -->|command| CMD[Command pattern checks]
-    KEY -->|path or edit| PATH[Resolve path and check root]
-    CMD --> DECIDE{Allowed?}
-    PATH --> DECIDE
-    DECIDE -->|yes| RUN
-    DECIDE -->|no| ASK[Prompt user]
-    ASK --> CHOICE{Decision}
-    CHOICE -->|deny| DENY[Return denied result]
+    KEY -->|execute| CMD[Command policy]
+    KEY -->|read/create/modify/delete| PATH[Canonicalize path]
+    CMD --> DECIDE{Allow, deny, or ask?}
+    PATH --> SENSITIVE{Sensitive or outside root?}
+    SENSITIVE -->|deny| DENY[Return denied result]
+    SENSITIVE -->|safe| DECIDE
+    DECIDE -->|allow| RUN
+    DECIDE -->|deny| DENY
+    DECIDE -->|ask| ASK[Prompt with target and operation]
+    ASK --> CHOICE{User decision}
+    CHOICE -->|deny| DENY
     CHOICE -->|allow once| RUN
-    CHOICE -->|allow exact or prefix| RULE[Add session rule] --> RUN
+    CHOICE -->|allow exact/prefix| RULE[Add capability-scoped grant] --> RUN
 ```
 
-Command matching rejects chaining, pipes, redirects, command substitution, and selected destructive patterns from automatic approval. Always-ask patterns include recursive removal, forced pushes, hard resets, forced cleaning, and force-deleting branches. Exact and prefix rules live only in memory for the current session.
+Command matching rejects chaining, pipes, redirects, command substitution, and selected destructive patterns from automatic approval. Exact and prefix grants are scoped to one capability and live only in memory for the current session. Every authorization request and decision is recorded in the session audit list.
 
-This is not an OS-level sandbox. Approved `child_process.exec` commands can affect the machine. Direct reads are not universally gated, and write/edit tools use different permission keys. Project content may contain prompt injection; model instructions are not a security boundary.
+File authorization resolves existing symlinks and the nearest existing ancestor for new paths before checking workspace containment. Hidden paths ask by default; common credential paths such as `.env`, `.ssh`, private keys, and certificate files are denied by default. Tools re-check file targets immediately before access or modification to reduce path-race exposure.
+
+This is not an OS-level sandbox. Approved `child_process.exec` commands can affect the machine and can access resources outside the workspace through the shell. Filesystem checks reduce tool-level escapes but cannot make arbitrary shell execution safe. Project content may contain prompt injection; model instructions are not a security boundary.
 
 ## Context engineering
 

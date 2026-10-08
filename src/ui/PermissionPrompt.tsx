@@ -1,36 +1,45 @@
 import { Box, Text } from "ink";
-import type { PermKey, UserDecision } from "../permission/types";
+import type {
+  PermissionDecision,
+  PermissionKey,
+  UserDecision,
+} from "../permission/types";
 
 export type AskRequest = {
-  key: PermKey;
-  decision: "ask" | "always-ask";
+  key: PermissionKey;
+  decision: PermissionDecision;
   resolve: (d: UserDecision) => void;
 };
 
 type Option = { label: string; value: UserDecision };
 
-const LABELS: Record<PermKey["kind"], string> = {
-  command: "run: ",
-  path: "path: ",
-  edit: "edit: ",
+const LABELS: Record<PermissionKey["capability"], string> = {
+  read: "read: ",
+  create: "create: ",
+  modify: "modify: ",
+  delete: "delete: ",
+  execute: "run: ",
+  external: "external: ",
 };
 
-// always-ask actions are never saved to the allowlist, so only offer once or deny
 export function optionsFor(
-  key: PermKey,
-  decision: "ask" | "always-ask",
+  key: PermissionKey,
+  decision: PermissionDecision,
 ): Option[] {
-  if (decision === "always-ask") {
+  if (decision === "deny" || key.risk === "high") {
     return [
       { label: "allow once", value: "allow-once" },
       { label: "deny", value: "deny" },
     ];
   }
-  // a prefix rule makes no sense for a file path
-  if (key.kind === "edit") {
+  if (key.capability !== "execute") {
     return [
       { label: "allow once", value: "allow-once" },
-      { label: "always allow edits to this file", value: "allow-always-exact" },
+      { label: "always allow this exact target", value: "allow-always-exact" },
+      {
+        label: "always allow this target subtree",
+        value: "allow-always-prefix",
+      },
       { label: "deny", value: "deny" },
     ];
   }
@@ -49,7 +58,7 @@ export function PermissionPrompt({
   request: AskRequest;
   selected: number;
 }) {
-  const risky = request.decision === "always-ask";
+  const risky = request.key.risk === "high";
   const options = optionsFor(request.key, request.decision);
   return (
     <Box
@@ -59,22 +68,21 @@ export function PermissionPrompt({
       paddingX={1}
     >
       <Text bold color={risky ? "red" : "yellow"}>
-        {risky
-          ? "Risky action, needs approval every time"
-          : "Permission needed"}
+        {risky ? "Sensitive action requires approval" : "Permission needed"}
       </Text>
       <Text>
-        {LABELS[request.key.kind]}
-        {request.key.value}
+        {LABELS[request.key.capability]}
+        {request.key.target}
       </Text>
-      {options.map((o, i) => (
+      <Text dimColor>{request.key.explanation}</Text>
+      {options.map((option, index) => (
         <Text
-          key={o.value}
-          bold={i === selected}
-          color={i === selected ? "cyan" : "gray"}
+          key={option.value}
+          bold={index === selected}
+          color={index === selected ? "cyan" : "gray"}
         >
-          {i === selected ? "> " : "  "}
-          {o.label}
+          {index === selected ? "> " : "  "}
+          {option.label}
         </Text>
       ))}
       <Text dimColor>up/down to move, enter to choose, esc to deny</Text>

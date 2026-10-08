@@ -1,5 +1,5 @@
 import type { z, ZodRawShape } from "zod";
-import type { Asker, PermKey, PermSession } from "../permission/types";
+import type { Asker, PermissionKey, PermSession } from "../permission/types";
 
 export type Tool<
   TParams extends ZodRawShape = ZodRawShape,
@@ -10,7 +10,7 @@ export type Tool<
   parameters: z.ZodObject<TParams>;
   getPermissionKey: (
     args: z.infer<z.ZodObject<TParams>>,
-  ) => PermKey | undefined;
+  ) => PermissionKey | undefined;
   execute: (
     args: z.infer<z.ZodObject<TParams>>,
     signal: AbortSignal,

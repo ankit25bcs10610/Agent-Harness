@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Tool } from "../types";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { canonicalizePath } from "../../permission/match";
 
 export const fileWrite: Tool<
   { path: z.ZodString; content: z.ZodString },
@@ -14,11 +15,21 @@ export const fileWrite: Tool<
     path: z.string().describe("path of the new file, relative or absolute"),
     content: z.string().describe("full content of the new file"),
   }),
-  getPermissionKey: ({ path }) => ({ kind: "path", value: path }),
+  getPermissionKey: ({ path }) => ({
+    capability: "create",
+    target: path,
+    explanation: `Create file: ${path}`,
+    risk: "normal",
+  }),
   execute: async ({ path, content }) => {
     try {
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, content, { encoding: "utf-8", flag: "wx" }); // wx: fail with EEXIST if the file already exists (atomic check and create)
+      const canonical = await canonicalizePath(path, process.cwd());
+      if (canonical.exists) throw new Error(`File already exists: "${path}"`);
+      await mkdir(dirname(canonical.target), { recursive: true });
+      await writeFile(canonical.target, content, {
+        encoding: "utf-8",
+        flag: "wx",
+      });
       return {
         written: true,
       };

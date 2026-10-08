@@ -1,8 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { runTool } from "../../src/tool/registry";
+import type { PermissionGrant } from "../../src/permission/types";
+import type { ToolContext } from "../../src/tool/types";
 
-const context = (root = process.cwd()) => ({
-  permissions: { projectRoot: root, allowList: [/^echo /] },
+const context = (root = process.cwd()): ToolContext => ({
+  permissions: {
+    projectRoot: root,
+    grants: [
+      {
+        capability: "execute",
+        scope: "prefix",
+        target: "echo",
+      } as PermissionGrant,
+    ],
+    audit: [],
+  },
   asker: async () => "allow-once" as const,
   signal: new AbortController().signal,
   maxOutputChars: 20,
@@ -18,6 +30,19 @@ describe("tool registry", () => {
     expect(
       await runTool("read_file", '{"limit":"wrong"}', context()),
     ).toContain("invalid arguments");
+  });
+
+  test("authorizes reads and records a denied decision", async () => {
+    const denied = context();
+    denied.asker = async () => "deny";
+    const result = await runTool(
+      "read_file",
+      JSON.stringify({ path: "README.md" }),
+      denied,
+    );
+    expect(result).toContain("Not allowed to run tool");
+    expect(denied.permissions.audit.at(-1)?.capability).toBe("read");
+    expect(denied.permissions.audit.at(-1)?.decision).toBe("deny");
   });
 
   test("executes an allowed command and truncates output", async () => {

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import z from "zod";
 import type { Tool } from "../types";
 import { TOOLS } from "../../config";
+import { assertNoSymlinkRace, canonicalizePath } from "../../permission/match";
 
 const DEFAULT_LIMIT = TOOLS.readFileDefaultLimit;
 
@@ -31,10 +32,18 @@ export const fileRead: Tool<
       .optional(),
   }),
 
-  getPermissionKey: () => undefined,
+  getPermissionKey: ({ path }) => ({
+    capability: "read",
+    target: path,
+    explanation: `Read file: ${path}`,
+    risk: "normal",
+  }),
   execute: async ({ path, offset = 0, limit = DEFAULT_LIMIT }) => {
     try {
-      const content = await readFile(path, "utf-8");
+      const canonical = await canonicalizePath(path, process.cwd());
+      if (!canonical.exists) throw new Error("file does not exist");
+      await assertNoSymlinkRace(canonical.target);
+      const content = await readFile(canonical.target, "utf-8");
       const lines = content.split("\n");
       const output = lines.slice(offset, offset + limit).join("\n");
       return {

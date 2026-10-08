@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Tool } from "../types";
 import { readFile, writeFile } from "node:fs/promises";
+import { assertNoSymlinkRace, canonicalizePath } from "../../permission/match";
 
 export const strReplace: Tool<
   { path: z.ZodString; oldString: z.ZodString; newString: z.ZodString },
@@ -16,12 +17,18 @@ export const strReplace: Tool<
       .describe("exact text to find, copied from the file, must be unique"),
     newString: z.string().describe("text to replace it with"),
   }),
-  getPermissionKey: ({ path }) => ({ kind: "edit", value: path }),
+  getPermissionKey: ({ path }) => ({
+    capability: "modify",
+    target: path,
+    explanation: `Modify file: ${path}`,
+    risk: "high",
+  }),
   execute: async ({ path, oldString, newString }) => {
     try {
-      let content = "";
-
-      content = await readFile(path, "utf-8");
+      const canonical = await canonicalizePath(path, process.cwd());
+      if (!canonical.exists) throw new Error("file does not exist");
+      await assertNoSymlinkRace(canonical.target);
+      const content = await readFile(canonical.target, "utf-8");
 
       const count = content.split(oldString).length - 1;
 
@@ -35,7 +42,8 @@ export const strReplace: Tool<
       }
 
       const updated = content.replace(oldString, newString);
-      await writeFile(path, updated, "utf-8");
+      await assertNoSymlinkRace(canonical.target);
+      await writeFile(canonical.target, updated, "utf-8");
 
       return {
         replaced: true,

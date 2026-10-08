@@ -1,17 +1,27 @@
-import { resolve } from "node:path";
 import type { Tool } from "../tool/types";
-import { checkCommand, checkEdit, checkPath } from "./match";
+import { checkCommand, checkPath } from "./match";
 import type {
   Allowed,
   Asker,
-  PermDecision,
-  PermKey,
+  PermissionDecision,
+  PermissionKey,
   PermSession,
   UserDecision,
 } from "./types";
 
-function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function audit(
+  permissions: PermSession,
+  key: PermissionKey,
+  decision: PermissionDecision | UserDecision,
+  reason: string,
+) {
+  permissions.audit.push({
+    at: new Date().toISOString(),
+    capability: key.capability,
+    target: key.target,
+    decision,
+    reason,
+  });
 }
 
 export async function checkPermission(
@@ -21,53 +31,57 @@ export async function checkPermission(
   asker: Asker,
 ): Promise<Allowed> {
   const rawKey = tool.getPermissionKey(args);
-  if (rawKey === undefined) return { ok: true };
-  // edit paths are resolved so "src/a.ts" and "./src/a.ts" share one allowlist rule
-  const key: PermKey =
-    rawKey.kind === "edit"
-      ? { ...rawKey, value: resolve(permissions.projectRoot, rawKey.value) }
-      : rawKey;
-  let decision: PermDecision;
-  switch (key.kind) {
-    case "command":
-      decision = checkCommand(key.value, permissions.allowList);
-      break;
-    case "path":
-      decision = checkPath(key.value, permissions.projectRoot);
-      break;
-    case "edit":
-      decision = checkEdit(
-        key.value,
+  if (!rawKey) return { ok: true };
+
+  let key = rawKey;
+  let decision: PermissionDecision;
+  try {
+    if (rawKey.capability === "execute") {
+      decision = checkCommand(rawKey.target, permissions.grants);
+    } else if (rawKey.capability !== "external") {
+      const checked = await checkPath(
+        rawKey.target,
         permissions.projectRoot,
-        permissions.allowList,
+        rawKey.capability,
+        permissions.grants,
       );
-      break;
-    default:
+      key = { ...rawKey, target: checked.target };
+      decision = checked.decision;
+      if (decision === "deny") {
+        audit(permissions, key, decision, checked.reason);
+        return { ok: false, reason: checked.reason };
+      }
+    } else {
       decision = "ask";
+    }
+  } catch (error) {
+    const reason =
+      error instanceof Error
+        ? error.message
+        : "authorization path validation failed";
+    audit(permissions, key, "deny", reason);
+    return { ok: false, reason };
   }
-  if (decision === "allowed") return { ok: true };
-  const userDecision: UserDecision = await asker(key, decision);
-  if (userDecision === "deny") {
+
+  if (decision === "allow") {
+    audit(permissions, key, decision, "capability grant matched");
+    return { ok: true };
+  }
+
+  const userDecision = await asker(key, decision);
+  audit(permissions, key, userDecision, key.explanation);
+  if (userDecision === "deny")
     return {
       ok: false,
       reason: "User denied tool use with the provided arguments",
     };
-  }
 
-  // avoid adding to permissions on always-ask toolCalls
-  if (decision === "ask") {
-    const trimmed = key.value.trim();
-    if (userDecision === "allow-always-exact") {
-      // add exact string to allowList
-      permissions.allowList.push(new RegExp(`^${escapeRegex(trimmed)}$`));
-    } else if (userDecision === "allow-always-prefix") {
-      // add prefix * to allowList regex
-      const base = trimmed.split(/\s+/)[0];
-      if (base)
-        permissions.allowList.push(
-          new RegExp(`^${escapeRegex(base)}(\\s.*)?$`),
-        );
-    }
+  if (decision === "ask" && userDecision !== "allow-once") {
+    permissions.grants.push({
+      capability: key.capability,
+      scope: userDecision === "allow-always-exact" ? "exact" : "prefix",
+      target: key.target,
+    });
   }
   return { ok: true };
 }

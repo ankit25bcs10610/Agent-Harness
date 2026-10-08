@@ -20,8 +20,9 @@ import type { LoopConfig } from "../loop/types";
 import { StatusBar } from "./StatusBar";
 
 const permissions: PermSession = {
-  allowList: [],
   projectRoot: process.cwd(),
+  grants: [],
+  audit: [],
 };
 
 type Props = {
@@ -36,18 +37,27 @@ let nextId = 1;
 const COMMANDS: Record<string, string> = {
   "/status": "Run git status and summarize the current repository state.",
   "/diff": "Inspect the current git diff and explain every meaningful change.",
-  "/tree": "Show a concise project tree, excluding dependencies and build output.",
-  "/typecheck": "Run the project's TypeScript type check and explain any errors.",
+  "/tree":
+    "Show a concise project tree, excluding dependencies and build output.",
+  "/typecheck":
+    "Run the project's TypeScript type check and explain any errors.",
   "/test": "Find and run the project's test suite, then report the result.",
   "/lint": "Find and run the project's lint command, then explain any issues.",
-  "/format": "Check the project formatting and format files only when necessary.",
+  "/format":
+    "Check the project formatting and format files only when necessary.",
   "/build": "Find and run the project's build command, then report the result.",
-  "/audit": "Audit project dependencies for outdated or vulnerable packages and summarize the findings.",
-  "/review": "Review the current changes for bugs, security problems, and missing validation. Do not edit files.",
-  "/start": "Find the development server command and start it only after explaining the command and asking for approval if needed.",
-  "/stop": "Find the development server process started for this project and stop it only after asking for approval.",
-  "/commit": "Review the current diff, propose a concise commit message, and create a commit only after explicit approval.",
-  "/deploy": "Inspect the deployment configuration and explain the deployment steps. Do not deploy without explicit approval.",
+  "/audit":
+    "Audit project dependencies for outdated or vulnerable packages and summarize the findings.",
+  "/review":
+    "Review the current changes for bugs, security problems, and missing validation. Do not edit files.",
+  "/start":
+    "Find the development server command and start it only after explaining the command and asking for approval if needed.",
+  "/stop":
+    "Find the development server process started for this project and stop it only after asking for approval.",
+  "/commit":
+    "Review the current diff, propose a concise commit message, and create a commit only after explicit approval.",
+  "/deploy":
+    "Inspect the deployment configuration and explain the deployment steps. Do not deploy without explicit approval.",
 };
 
 function resolveCommand(text: string): string {

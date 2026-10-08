@@ -222,7 +222,10 @@ export async function listSessions(
     )
   ).filter((session): session is Session => Boolean(session));
   return sessions
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .sort(
+      (a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
+    )
     .map(({ id, name, title, createdAt, updatedAt, status, stopReason }) => ({
       id,
       name,

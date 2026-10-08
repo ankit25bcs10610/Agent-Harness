@@ -4,6 +4,7 @@ import { dirname, extname, join, relative, resolve } from "node:path";
 
 export type RepositoryOptions = {
   root: string;
+  regex?: boolean;
   glob?: string;
   exclude?: string[];
   respectGitignore?: boolean;
@@ -123,6 +124,10 @@ async function runRg(
   signal: AbortSignal,
 ): Promise<string | undefined> {
   return new Promise((resolveOutput, reject) => {
+    if (signal.aborted) {
+      reject(new Error("repository search cancelled"));
+      return;
+    }
     const child = spawn("rg", args, {
       cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
@@ -156,6 +161,53 @@ async function runRg(
   });
 }
 
+async function fallbackSearch(
+  query: string,
+  root: string,
+  options: RepositoryOptions,
+  signal: AbortSignal,
+): Promise<SearchMatch[]> {
+  const matcher = options.regex ? new RegExp(query) : undefined;
+  const files = await fallbackFiles(root, {
+    ...options,
+    maxResults: Math.max(options.maxResults ?? DEFAULT_MAX_RESULTS, 1) * 10,
+  });
+  const results: SearchMatch[] = [];
+  for (const path of files) {
+    if (signal.aborted) throw new Error("repository search cancelled");
+    const absolute = join(root, path);
+    if (await isBinary(absolute)) continue;
+    const content = await readFileText(absolute);
+    if (content === undefined) continue;
+    const lines = content.split(/\r?\n/);
+    for (const [index, text] of lines.entries()) {
+      const match = matcher ? matcher.exec(text) : undefined;
+      const column = matcher ? (match?.index ?? -1) : text.indexOf(query);
+      if (column < 0) continue;
+      results.push({ path, line: index + 1, column, text });
+      if (
+        results.length >=
+        (options.maxResults ?? DEFAULT_MAX_RESULTS) + (options.cursor ?? 0)
+      )
+        return results;
+    }
+  }
+  return results;
+}
+
+async function readFileText(path: string): Promise<string | undefined> {
+  try {
+    const handle = await open(path, "r");
+    try {
+      return (await handle.readFile()).toString("utf8");
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 export async function listRepositoryFiles(
   options: RepositoryOptions,
   signal: AbortSignal,
@@ -165,6 +217,7 @@ export async function listRepositoryFiles(
   total: number;
 }> {
   const root = await canonicalRoot(options.root);
+  if (signal.aborted) throw new Error("repository search cancelled");
   const excludes = [...DEFAULT_EXCLUDES, ...(options.exclude ?? [])];
   const args = [
     "--files",
@@ -247,9 +300,12 @@ export async function searchRepository(
     );
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new Error(
-      `search failed: ${error instanceof Error ? error.message : error}`,
-    );
+    if (
+      error instanceof Error &&
+      error.message === "repository search cancelled"
+    )
+      throw error;
+    raw = undefined;
   }
   const results: SearchMatch[] = [];
   let chars = 0;
@@ -289,6 +345,20 @@ export async function searchRepository(
       /* ignore non-match rg events */
     }
   }
+  if (raw === undefined) {
+    const fallback = await fallbackSearch(query, root, options, signal);
+    const page = bounded(
+      fallback,
+      options.maxResults ?? DEFAULT_MAX_RESULTS,
+      options.cursor ?? 0,
+    );
+    return {
+      results: page.items,
+      nextCursor: page.nextCursor,
+      total: page.total,
+      truncated: Boolean(page.nextCursor),
+    };
+  }
   const page = bounded(
     results,
     options.maxResults ?? DEFAULT_MAX_RESULTS,
@@ -314,7 +384,11 @@ export async function searchRepositorySymbols(
     : "(?:export\\s+)?(?:async\\s+)?(?:function|class|interface|type|enum|const|let|var)\\s+[A-Za-z_$][\\w$]*";
   return searchRepository(
     query,
-    { ...options, glob: options.glob ?? "**/*.{ts,tsx,js,jsx,py,go,rs,java}" },
+    {
+      ...options,
+      regex: true,
+      glob: options.glob ?? "**/*.{ts,tsx,js,jsx,py,go,rs,java}",
+    },
     signal,
   );
 }

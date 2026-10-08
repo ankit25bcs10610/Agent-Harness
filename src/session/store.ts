@@ -200,7 +200,7 @@ export function validateSession(value: unknown): Session {
 }
 
 function fileFor(sessionDir: string, id: string) {
-  return join(sessionDir, `${id}.json`);
+  return join(sessionDir, `${encodeURIComponent(id)}.json`);
 }
 
 async function readCandidate(path: string): Promise<Session | undefined> {

@@ -10,6 +10,10 @@ import {
 } from "../permission/match";
 import type { ChangeContract } from "./types";
 
+function comparablePath(value: string) {
+  return value.replaceAll("\\", "/").toLowerCase();
+}
+
 export type PreconditionResult = {
   kind: string;
   target: string;
@@ -162,7 +166,7 @@ export async function validateContractPreconditions(
       target: contract.contractId,
       passed: dryRun.files.every((file) => {
         const expected = contract.proposedFiles.find((item) =>
-          file.path.endsWith(item.path),
+          comparablePath(file.path).endsWith(comparablePath(item.path)),
         );
         return file.originalHash === expected?.originalHash;
       }),

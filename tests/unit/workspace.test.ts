@@ -48,7 +48,9 @@ test("discovers repository metadata without changing Git state", async () => {
   await repository();
   const metadata = await discoverRepository(root);
   expect(metadata.isRepository).toBe(true);
-  expect(metadata.root).toBe(await realpath(root));
+  expect(metadata.root.replaceAll("\\", "/")).toBe(
+    (await realpath(root)).replaceAll("\\", "/"),
+  );
   expect(metadata.dirty).toBe(false);
   expect(metadata.head).toHaveLength(40);
   expect(metadata.worktrees.length).toBeGreaterThanOrEqual(1);
@@ -78,7 +80,9 @@ test("creates an isolated real worktree and rejects illegal transitions", async 
   expect(workspace.status).toBe("READY");
   expect(workspace.branch).toContain("chiku/fix-auth-");
   expect(
-    await readFile(join(workspace.worktreePath, "README.md"), "utf8"),
+    (
+      await readFile(join(workspace.worktreePath, "README.md"), "utf8")
+    ).replaceAll("\r\n", "\n"),
   ).toBe("base\n");
   await expect(
     manager.transition(workspace.workspaceId, "INTEGRATED"),
@@ -190,7 +194,9 @@ test("workspace execution context prevents cross-workspace tool access", async (
     JSON.stringify({ command: "pwd" }),
     context,
   );
-  expect(output).toContain(first.worktreePath);
+  expect(output.replaceAll("\\", "/")).toContain(
+    first.worktreePath.replaceAll("\\", "/"),
+  );
 });
 
 test("reviews and integrates an exact clean workspace diff without overwriting the target", async () => {
@@ -219,7 +225,9 @@ test("reviews and integrates an exact clean workspace diff without overwriting t
     true,
   );
   expect(result.applied).toBe(true);
-  expect(await readFile(join(root, "README.md"), "utf8")).toBe("integrated\n");
+  expect(
+    (await readFile(join(root, "README.md"), "utf8")).replaceAll("\r\n", "\n"),
+  ).toBe("integrated\n");
   expect((await manager.require(workspace.workspaceId)).status).toBe(
     "INTEGRATED",
   );

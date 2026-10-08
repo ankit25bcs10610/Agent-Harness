@@ -3,6 +3,7 @@ import { helpText, parseArgs } from "../src/cli";
 import { loadCliConfig } from "../src/cli-config";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 test("CLI help and version parsing are provider-independent", () => {
@@ -22,7 +23,7 @@ test("CLI validates options and preserves explicit runtime configuration", () =>
     "--continue",
     "--no-color",
   ]);
-  expect(options.workspace).toBe("/tmp/project");
+  expect(options.workspace).toBe(resolve("/tmp/project"));
   expect(options.model).toBe("openai/gpt-4o");
   expect(options.continueSession).toBe(true);
   expect(() => parseArgs(["--unknown"])).toThrow("unknown option");

@@ -65,7 +65,9 @@ export async function discoverRepository(
   const location = await realpath(resolve(start)).catch(() => resolve(start));
   let root: string;
   try {
-    root = await runGit(location, ["rev-parse", "--show-toplevel"]);
+    root = await realpath(
+      await runGit(location, ["rev-parse", "--show-toplevel"]),
+    );
   } catch (error) {
     if (
       error instanceof GitRepositoryError &&

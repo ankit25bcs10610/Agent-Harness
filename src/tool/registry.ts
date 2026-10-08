@@ -9,6 +9,7 @@ import { fileWrite } from "./tools/write_file";
 import { listFiles } from "./tools/list_files";
 import { searchFiles } from "./tools/search_files";
 import { searchSymbols } from "./tools/search_symbols";
+import { applyPatchTool } from "./tools/apply_patch";
 import { truncateStrings } from "./truncate_tool";
 import type { Tool, ToolContext } from "./types";
 import z from "zod";
@@ -22,6 +23,7 @@ const tools: Tool<any, unknown>[] = [
   listFiles,
   searchFiles,
   searchSymbols,
+  applyPatchTool,
 ];
 
 export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(

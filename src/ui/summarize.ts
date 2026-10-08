@@ -8,6 +8,7 @@ export function summarizeArgs(raw: string): string {
       args.command ??
       args.path ??
       args.skillName ??
+      args.patch ??
       Object.values(args)[0] ??
       "";
     const text = String(main).replace(/\s+/g, " ");

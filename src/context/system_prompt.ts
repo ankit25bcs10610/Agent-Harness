@@ -17,6 +17,7 @@ export const generateSystemPrompt = async (): Promise<SystemMessage> => {
 - Tool errors come back as text starting with "Error". Read them, fix the cause, then retry. Never repeat the same failing call.
 - If output says [truncated] or [Tool output pruned], rerun with a narrower query.
 - Use list_files for bounded repository navigation, search_files for text/regex searches, and search_symbols for lightweight declarations. Prefer pagination and narrow globs; do not read the whole repository.
+- Use apply_patch for multi-file edits: preview with dryRun when useful, preserve the returned undoToken, and never reapply a stale or conflicting patch.
 `;
 
   const RULES = `# WORKING RULES:

@@ -200,18 +200,21 @@ Only OpenRouter is implemented as a provider today. The provider types and norma
 
 ## Tool system
 
-| Tool          | Arguments                                         | Behavior                                                                               | Permission model                                                                |
-| ------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `bash`        | `command`, optional `shell`, `cwd`, limits, `env` | Runs a controlled non-interactive process with structured output and failure metadata. | Central execute authorization; destructive/high-risk commands require approval. |
-| `list_files`  | `path`, glob/exclusions, limits, cursor          | Lists bounded file metadata and supports continuation pages.                    | Capability `read`; canonical workspace path; skips sensitive/default excluded trees. |
-| `search_files`| `query`, optional regex/glob/path, limits, cursor | Uses ripgrep when available and returns path, line, column, and matching text.  | Capability `read`; gitignore-aware and bounded by result/character/time limits. |
-| `search_symbols` | optional symbol name/path/glob/limits          | Finds common source declarations with a lightweight language-agnostic pattern. | Capability `read`; source globs and the same workspace boundaries. |
-| `read_file`   | `path`, optional `offset`, `limit`                | Reads bounded text lines; default limit is 2,000.                                      | Capability `read`; hidden paths ask and sensitive paths deny.                   |
-| `write_file`  | `path`, `content`                                 | Creates parent directories and a new file; refuses overwrite.                          | Capability `create`; canonical workspace path required.                         |
-| `str_replace` | `path`, `oldString`, `newString`                  | Replaces exactly one occurrence; fails on zero or multiple matches.                    | Capability `modify`; canonical path and symlink re-check.                       |
-| `load_skill`  | `skillName: string`                               | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.             | Local skill capability has no external access.                                  |
+| Tool             | Arguments                                         | Behavior                                                                                   | Permission model                                                                              |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `bash`           | `command`, optional `shell`, `cwd`, limits, `env` | Runs a controlled non-interactive process with structured output and failure metadata.     | Central execute authorization; destructive/high-risk commands require approval.               |
+| `list_files`     | `path`, glob/exclusions, limits, cursor           | Lists bounded file metadata and supports continuation pages.                               | Capability `read`; canonical workspace path; skips sensitive/default excluded trees.          |
+| `search_files`   | `query`, optional regex/glob/path, limits, cursor | Uses ripgrep when available and returns path, line, column, and matching text.             | Capability `read`; gitignore-aware and bounded by result/character/time limits.               |
+| `search_symbols` | optional symbol name/path/glob/limits             | Finds common source declarations with a lightweight language-agnostic pattern.             | Capability `read`; source globs and the same workspace boundaries.                            |
+| `apply_patch`    | patch, dry-run, diff preview, undo token          | Applies validated multi-file unified diffs with atomic file replacement and verified undo. | Capability `modify`; stale/conflicting, concurrent, binary, and symlink targets are rejected. |
+| `read_file`      | `path`, optional `offset`, `limit`                | Reads bounded text lines; default limit is 2,000.                                          | Capability `read`; hidden paths ask and sensitive paths deny.                                 |
+| `write_file`     | `path`, `content`                                 | Creates parent directories and a new file; refuses overwrite.                              | Capability `create`; canonical workspace path required.                                       |
+| `str_replace`    | `path`, `oldString`, `newString`                  | Replaces exactly one occurrence; fails on zero or multiple matches.                        | Capability `modify`; canonical path and symlink re-check.                                     |
+| `load_skill`     | `skillName: string`                               | Loads `.chiku/skills/<name>.md` after rejecting path traversal characters.                 | Local skill capability has no external access.                                                |
 
 Arguments are parsed as JSON and validated with Zod. Validation and execution failures return error text to the model. Tool result fields are truncated by `TOOLS.maxOutputChars`.
+
+`apply_patch` validates every file and hunk before writing. Dry-run returns concise file summaries; `includeDiff: true` includes the generated unified diff. A successful apply returns an in-memory undo token for verified agent-owned changes. Each file is replaced atomically where the filesystem permits, and a later multi-file failure attempts rollback only when the target still matches the newly written hash. This is best-effort transactional recovery, not a database transaction. Existing user changes are protected by content hashes and are never silently overwritten.
 
 ## Permission and safety architecture
 

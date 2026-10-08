@@ -275,6 +275,39 @@ test("experiment resume skips completed tasks instead of replaying them", async 
   await rm(directory, { recursive: true, force: true });
 });
 
+test("experiment runner executes and resumes configured trial counts", async () => {
+  await fixture();
+  const directory = await mkdtemp(join(tmpdir(), "chiku-experiment-trials-"));
+  const engine = new EvaluationEngine(undefined, undefined, directory);
+  const manager = new ExperimentManager(engine, directory);
+  const experiment = await manager.create({
+    name: "repeated trials",
+    suiteId: "fixture-suite",
+    datasetVersion: "test-v1",
+    modelConfiguration: { provider: "mock" },
+    agentConfiguration: { mode: "single" },
+    toolConfiguration: {},
+    runtimeVersion: "test",
+    trialCount: 3,
+  });
+  let executions = 0;
+  const adapter = async () => {
+    executions++;
+    return { changedFiles: [] };
+  };
+  const completed = await manager.run(experiment, [task()], adapter);
+  expect(executions).toBe(3);
+  expect(completed.results).toHaveLength(3);
+  const resumed = await manager.resume(
+    experiment.experimentId,
+    [task()],
+    adapter,
+  );
+  expect(executions).toBe(3);
+  expect(resumed.results).toHaveLength(3);
+  await rm(directory, { recursive: true, force: true });
+});
+
 test("fault injection produces an honest failure and experiment comparison warns on incompatible data", async () => {
   await fixture();
   const engine = new EvaluationEngine();

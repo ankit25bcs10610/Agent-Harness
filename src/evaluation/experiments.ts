@@ -47,9 +47,9 @@ export class ExperimentManager {
     signal?.addEventListener("abort", abort, { once: true });
     this.controllers.set(experiment.experimentId, controller);
     try {
-      const completed = new Set(
-        experiment.results.map((result) => result.taskId),
-      );
+      const completed = new Map<string, number>();
+      for (const result of experiment.results)
+        completed.set(result.taskId, (completed.get(result.taskId) ?? 0) + 1);
       const next = ExperimentSchema.parse({
         ...experiment,
         status: "running",
@@ -57,15 +57,23 @@ export class ExperimentManager {
       });
       await saveExperiment(next, this.directory);
       for (const task of tasks) {
-        if (completed.has(task.taskId) || controller.signal.aborted) continue;
-        const result = await this.engine.evaluateTask(
-          task,
-          adapter,
-          controller.signal,
-        );
-        next.results.push(result);
-        next.updatedAt = new Date().toISOString();
-        await saveExperiment(next, this.directory);
+        const finishedTrials = completed.get(task.taskId) ?? 0;
+        for (
+          let trial = finishedTrials;
+          trial < experiment.trialCount;
+          trial++
+        ) {
+          if (controller.signal.aborted) break;
+          const result = await this.engine.evaluateTask(
+            task,
+            adapter,
+            controller.signal,
+          );
+          next.results.push(result);
+          completed.set(task.taskId, trial + 1);
+          next.updatedAt = new Date().toISOString();
+          await saveExperiment(next, this.directory);
+        }
       }
       next.status = controller.signal.aborted ? "cancelled" : "completed";
       next.updatedAt = new Date().toISOString();

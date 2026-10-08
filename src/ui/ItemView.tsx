@@ -38,7 +38,7 @@ export function ItemView({ item }: { item: Item }) {
       );
     case "assistant":
       return (
-        <Labeled label="jig:" color="green">
+        <Labeled label="agent:" color="green">
           <Markdown text={item.text} />
         </Labeled>
       );

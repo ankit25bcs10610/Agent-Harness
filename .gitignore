@@ -23,5 +23,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# jig
+# Agent Harness local state
 .jig/sessions/

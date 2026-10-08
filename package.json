@@ -1,7 +1,7 @@
 {
-  "name": "jig",
+  "name": "agent-harness",
   "version": "1.0.0",
-  "description": "AI harness from scratch",
+  "description": "A terminal-based AI coding agent harness",
   "license": "MIT",
   "author": "Ankit Pandey",
   "type": "module",

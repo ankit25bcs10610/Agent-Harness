@@ -4,7 +4,7 @@ import type { Skill } from "./types";
 import { PATHS } from "../config";
 
 export const generateSystemPrompt = async (): Promise<SystemMessage> => {
-  const INTRODUCTION = `You are jig, an AI coding assistant that helps the user with software engineering tasks.
+  const INTRODUCTION = `You are Agent Harness, an AI coding assistant that helps the user with software engineering tasks.
 `;
 
   const STYLE = `# STYLE:

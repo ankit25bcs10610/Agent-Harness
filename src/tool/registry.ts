@@ -123,7 +123,10 @@ export async function runTool(
     return `Not allowed to run tool: ${name}, reason: ${allowedToRun.reason}`;
 
   try {
-    const run = await tool.execute(parsedArgs.data, ctx.signal, ctx);
+    const run = await tool.execute(parsedArgs.data, ctx.signal, {
+      ...ctx,
+      permissionGranted: true,
+    });
     return JSON.stringify(truncateStrings(run, ctx.maxOutputChars));
   } catch (error) {
     const message = error instanceof Error ? error.message : error;

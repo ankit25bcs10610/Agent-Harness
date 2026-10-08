@@ -224,6 +224,10 @@ export class McpClientConnection {
     const connection = this.connection;
     const record = this.records.get(namespacedName);
     if (!connection || !record) throw new Error("MCP tool is unavailable");
+    if (!context?.permissionGranted)
+      throw new Error(
+        "MCP tool invocation requires central permission approval",
+      );
     validateSchema(record.inputSchema, args);
     if (context?.allowedTools && !context.allowedTools.includes(namespacedName))
       throw new Error("agent capability policy denies this MCP tool");

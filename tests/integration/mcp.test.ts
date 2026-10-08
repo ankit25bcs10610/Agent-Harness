@@ -67,8 +67,30 @@ test("MCP tool input validation and capability policy fail closed", async () => 
       "mcp.fixture-policy.greet",
       {},
       new AbortController().signal,
+      {
+        allowedTools: ["mcp.fixture-policy.greet"],
+        permissionGranted: true,
+        permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+        asker: async () => "deny",
+        signal: new AbortController().signal,
+        maxOutputChars: 5_000,
+      },
     ),
   ).rejects.toThrow("missing required");
+  await expect(
+    connection.invoke(
+      "mcp.fixture-policy.greet",
+      { name: "Ankit" },
+      new AbortController().signal,
+      {
+        allowedTools: ["mcp.fixture-policy.greet"],
+        permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+        asker: async () => "deny",
+        signal: new AbortController().signal,
+        maxOutputChars: 5_000,
+      },
+    ),
+  ).rejects.toThrow("central permission approval");
 });
 
 test("MCP resources and prompts use the negotiated client session", async () => {

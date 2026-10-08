@@ -29,4 +29,6 @@ export type ToolContext = {
   allowedTools?: readonly string[];
   /** Required contract binding for delegated write tasks. */
   requiredContractId?: string;
+  /** Internal marker set only after the central permission engine approves a tool. */
+  permissionGranted?: boolean;
 };

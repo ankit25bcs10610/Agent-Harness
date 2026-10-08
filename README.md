@@ -164,6 +164,30 @@ bun run format       # Format source files with Prettier
 bun run format:check # Verify formatting
 ```
 
+## Slash commands
+
+The terminal UI includes shortcuts for common workflows. Type one at the `>` prompt and press Enter:
+
+```text
+/help       Show available shortcuts
+/status     Summarize Git status
+/diff       Explain current changes
+/tree       Show the project tree
+/typecheck  Run TypeScript validation
+/test       Find and run tests
+/lint       Run linting
+/format     Check and format the project
+/build      Run the build
+/audit      Audit dependencies
+/review     Review changes without editing
+/start      Start the development server
+/stop       Stop the project server
+/commit     Review and prepare a commit
+/deploy     Explain deployment and request approval before deploying
+```
+
+These are guided prompts, not permission bypasses. Chiku still asks for approval before edits, risky shell commands, commits, server control, or deployment.
+
 There is currently no automated test script configured in `package.json`. Type checking and formatting are the available repository-level validation commands.
 
 ## Project layout

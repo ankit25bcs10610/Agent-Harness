@@ -33,6 +33,32 @@ type LiveTool = { name: string; summary: string };
 
 let nextId = 1;
 
+const COMMANDS: Record<string, string> = {
+  "/status": "Run git status and summarize the current repository state.",
+  "/diff": "Inspect the current git diff and explain every meaningful change.",
+  "/tree": "Show a concise project tree, excluding dependencies and build output.",
+  "/typecheck": "Run the project's TypeScript type check and explain any errors.",
+  "/test": "Find and run the project's test suite, then report the result.",
+  "/lint": "Find and run the project's lint command, then explain any issues.",
+  "/format": "Check the project formatting and format files only when necessary.",
+  "/build": "Find and run the project's build command, then report the result.",
+  "/audit": "Audit project dependencies for outdated or vulnerable packages and summarize the findings.",
+  "/review": "Review the current changes for bugs, security problems, and missing validation. Do not edit files.",
+  "/start": "Find the development server command and start it only after explaining the command and asking for approval if needed.",
+  "/stop": "Find the development server process started for this project and stop it only after asking for approval.",
+  "/commit": "Review the current diff, propose a concise commit message, and create a commit only after explicit approval.",
+  "/deploy": "Inspect the deployment configuration and explain the deployment steps. Do not deploy without explicit approval.",
+};
+
+function resolveCommand(text: string): string {
+  const [firstWord = ""] = text.trim().split(/\s+/);
+  const command = firstWord.toLowerCase();
+  if (command === "/help") {
+    return `Available commands: ${Object.keys(COMMANDS).join(", ")}. You can also type any natural-language request.`;
+  }
+  return COMMANDS[command] ?? text;
+}
+
 export function App({ systemPrompt, session, config }: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -99,6 +125,7 @@ export function App({ systemPrompt, session, config }: Props) {
 
   async function submit(text: string) {
     // submits the user query to runLoop
+    const request = resolveCommand(text);
     const controller = new AbortController();
     abortRef.current = controller;
     push("user", text);
@@ -110,7 +137,7 @@ export function App({ systemPrompt, session, config }: Props) {
 
     try {
       const result = await runLoop({
-        messages: [{ type: "user", content: text }],
+        messages: [{ type: "user", content: request }],
         state: sessionRef.current.state,
         complete: completeStream,
         systemPrompt,

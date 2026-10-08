@@ -1,0 +1,42 @@
+import { expect, test } from "bun:test";
+import { helpText, parseArgs } from "../src/cli";
+import { loadCliConfig } from "../src/cli-config";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+test("CLI help and version parsing are provider-independent", () => {
+  expect(parseArgs(["--help"]).command).toBe("help");
+  expect(parseArgs(["--version"]).command).toBe("version");
+  expect(helpText()).toContain("--workspace <path>");
+});
+
+test("CLI validates options and preserves explicit runtime configuration", () => {
+  const options = parseArgs([
+    "--workspace",
+    "/tmp/project",
+    "--model",
+    "openai/gpt-4o",
+    "--provider",
+    "openrouter",
+    "--continue",
+    "--no-color",
+  ]);
+  expect(options.workspace).toBe("/tmp/project");
+  expect(options.model).toBe("openai/gpt-4o");
+  expect(options.continueSession).toBe(true);
+  expect(() => parseArgs(["--unknown"])).toThrow("unknown option");
+  expect(() => parseArgs(["--provider", "unknown"])).toThrow("not configured");
+});
+
+test("configuration loads from an explicit file without persisting credentials", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "chiku-cli-config-"));
+  const path = join(directory, "config.json");
+  await writeFile(
+    path,
+    JSON.stringify({ model: "local/model", provider: "ollama" }),
+  );
+  const config = await loadCliConfig(path);
+  expect(config).toEqual({ model: "local/model", provider: "ollama" });
+  await rm(directory, { recursive: true, force: true });
+});

@@ -1,5 +1,6 @@
 import { readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { homedir } from "node:os";
 import { parse } from "yaml";
 import { PATHS } from "../config";
 import type { Skill } from "../context/types";
@@ -109,9 +110,7 @@ async function scan(
 
 export async function discoverSkills(
   projectDirectory = PATHS.skillsDir,
-  globalDirectory = process.env.HOME
-    ? join(process.env.HOME, ".chiku", "skills")
-    : undefined,
+  globalDirectory = join(homedir(), ".chiku", "skills"),
 ): Promise<SkillDiscovery> {
   const diagnostics: SkillDiagnostic[] = [];
   const project = await scan(projectDirectory, "project", diagnostics);

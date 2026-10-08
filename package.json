@@ -4,14 +4,42 @@
   "description": "A terminal-based AI coding agent",
   "license": "MIT",
   "author": "Ankit Pandey",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ankit25bcs10610/Agent-Harness.git"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "terminal",
+    "bun",
+    "developer-tools"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "bin": {
+    "chiku": "dist/chiku.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
-  "main": "index.js",
+  "main": "dist/chiku.js",
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
     "dev": "bun src/index.tsx",
     "watch": "bun --watch src/index.tsx",
     "typecheck": "tsc --noEmit",
+    "build": "bun scripts/build-cli.ts",
+    "build:binary": "bun scripts/build-binary.ts",
+    "package:check": "npm pack --dry-run",
+    "package:test": "bun tests/package-smoke.ts",
+    "release:checksums": "bun scripts/checksums.ts dist/chiku.js dist/chiku.js.map",
+    "prepack": "bun run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "benchmark:intelligence": "bun scripts/benchmark-intelligence.ts"
@@ -28,6 +56,7 @@
     "@openrouter/sdk": "^1.2.66",
     "dotenv": "^17.4.2",
     "ink": "^7.1.1",
+    "react-devtools-core": "^8.0.0",
     "marked": "^18.1.0",
     "react": "^19.3.0",
     "yaml": "^2.9.1",

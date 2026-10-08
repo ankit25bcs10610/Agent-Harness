@@ -118,6 +118,10 @@ Chiku includes a versioned, fixture-based evaluation foundation for measuring re
 
 See [docs/EVALUATION.md](docs/EVALUATION.md) for the execution model, safety guarantees, terminal inspection commands, and the exact remaining limitations. The [implementation tracker](docs/EVALUATION_TRACKER.md) distinguishes tested behavior from code that still needs broader integration. No benchmark score is claimed until a reproducible task run has produced it.
 
+## Installation and packaging
+
+The supported development/runtime requirement is Bun 1.x. Build a local package artifact with `bun run build`, inspect its contents with `npm run package:check`, and run the clean tarball smoke test with `npm run package:test`. The generated executable is `dist/chiku.js`; it is not a public registry release. Use `bun src/index.tsx --help` during development or the packaged `chiku` executable after installation. See [docs/PACKAGING_TRACKER.md](docs/PACKAGING_TRACKER.md) for verified and unavailable platform behavior.
+
 ## High-level system architecture
 
 ```mermaid

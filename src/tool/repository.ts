@@ -42,21 +42,36 @@ const DEFAULT_MAX_CHARS = 20_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 function globToRegExp(pattern: string): RegExp {
-  const source = pattern
+  const rootWildcard = pattern.startsWith("**/");
+  const normalized = rootWildcard ? pattern.slice(3) : pattern;
+  const expanded = normalized.replace(
+    /\{([^{}]+)\}/g,
+    (_, alternatives: string) => `(${alternatives.split(",").join("|")})`,
+  );
+  const source = expanded
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
     .replace(/\*\*/g, "@@DOUBLE@@")
     .replace(/\*/g, "[^/]*")
     .replace(/@@DOUBLE@@/g, ".*")
     .replace(/\?/g, "[^/]");
-  return new RegExp(`^${source}$`);
+  return new RegExp(`^${rootWildcard ? "(?:.*/)?" : ""}${source}$`);
 }
 
 function matchesAny(path: string, patterns: string[]): boolean {
-  return patterns.some(
-    (pattern) =>
+  return patterns.some((pattern) => {
+    const brace = pattern.match(/\{([^{}]+)\}/);
+    if (brace) {
+      return brace[1]!
+        .split(",")
+        .some((alternative) =>
+          matchesAny(path, [pattern.replace(brace[0], alternative)]),
+        );
+    }
+    return (
       globToRegExp(pattern).test(path) ||
-      globToRegExp(`**/${pattern}`).test(path),
-  );
+      globToRegExp(`**/${pattern}`).test(path)
+    );
+  });
 }
 
 function bounded<T>(items: T[], maxResults: number, cursor: number) {

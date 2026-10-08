@@ -22,6 +22,8 @@ Chiku is a terminal-native AI coding agent and harness. It is more than an LLM A
 
 The current runtime connects to OpenRouter, renders through React and Ink, and exposes a small set of project tools. It can inspect files, create files, make exact replacements, run non-interactive shell commands, and load local Markdown skills. Sensitive operations pass through human approval.
 
+MCP is an optional extension. Explicitly configured servers can be connected with approval, discovered tools are namespaced as `mcp.<server>.<tool>`, and calls use the existing tool registry and external permission capability. No server is started or contacted automatically.
+
 ## Why Chiku?
 
 - **Modular runtime:** provider communication, loop control, context engineering, tools, permissions, persistence, and presentation are separated.

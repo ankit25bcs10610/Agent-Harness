@@ -57,6 +57,14 @@ export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(
   tools.map((tool) => [tool.name, tool]),
 );
 
+export function registerExternalTools(external: readonly Tool<any, unknown>[]) {
+  for (const tool of external) {
+    if (registry[tool.name]) continue;
+    tools.push(tool);
+    registry[tool.name] = tool;
+  }
+}
+
 export function generateToolsArray(): ToolSpec[] {
   return tools.map((tool) => ({
     name: tool.name,

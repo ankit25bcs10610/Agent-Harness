@@ -178,6 +178,22 @@ export function validateSession(value: unknown): Session {
     ...(typeof value.stopReason === "string"
       ? { stopReason: value.stopReason }
       : {}),
+    ...(Array.isArray(value.mcpServers)
+      ? {
+          mcpServers: value.mcpServers.filter(
+            (server): server is NonNullable<Session["mcpServers"]>[number] =>
+              isRecord(server) &&
+              typeof server.id === "string" &&
+              (server.transport === "stdio" ||
+                server.transport === "streamable-http") &&
+              Array.isArray(server.args) &&
+              server.args.every((arg) => typeof arg === "string") &&
+              typeof server.enabled === "boolean" &&
+              Array.isArray(server.allowedTools) &&
+              server.allowedTools.every((tool) => typeof tool === "string"),
+          ),
+        }
+      : {}),
   };
   if (session.state) session.state = recoverUnfinishedTools(session.state);
   return session;

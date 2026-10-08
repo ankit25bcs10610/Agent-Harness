@@ -35,6 +35,7 @@ import {
   listExperiments,
   proposeImprovements,
 } from "../evaluation";
+import { McpClientManager } from "../mcp";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -91,6 +92,7 @@ const COMMANDS: Record<string, string> = {
   "/benchmark": "Inspect registered benchmark suites.",
   "/experiments": "Inspect persisted evaluation experiments.",
   "/improve": "Inspect evidence-backed improvement candidates.",
+  "/mcp": "Manage explicitly configured MCP servers and discovered tools.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
@@ -161,6 +163,7 @@ export function App({ systemPrompt, session, config }: Props) {
     }),
   );
   const evaluationRef = useRef(new EvaluationEngine());
+  const mcpRef = useRef(new McpClientManager());
 
   function push(kind: "user" | "assistant" | "error", text: string) {
     const id = nextId++;
@@ -275,6 +278,57 @@ export function App({ systemPrompt, session, config }: Props) {
         } else {
           throw new Error(
             "supported workspace commands: list, create, show, use, status, diff, reconcile",
+          );
+        }
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
+    if (localCommand === "/mcp") {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const [operation = "list", value] = remainder.split(/\s+/, 2);
+        if (operation === "list") {
+          push("assistant", JSON.stringify(mcpRef.current.list(), null, 2));
+        } else if (operation === "connect") {
+          const configured = await mcpRef.current.loadConfigured(value);
+          if (!configured.length) throw new Error("no MCP servers configured");
+          const connected: string[] = [];
+          for (const server of configured) {
+            const decision = await asker(
+              {
+                capability: "external",
+                target: `mcp-server:${server.id}`,
+                explanation: `Connect to external MCP server ${server.id}`,
+                risk: "normal",
+              },
+              "ask",
+            );
+            if (decision === "deny") continue;
+            await mcpRef.current.connect(server, controller.signal);
+            connected.push(server.id);
+            sessionRef.current.mcpServers = mcpRef.current.configs();
+            sessionRef.current.updatedAt = Date.now().toString();
+            await saveSession(sessionRef.current);
+          }
+          push("assistant", JSON.stringify({ connected }, null, 2));
+        } else if (operation === "tools") {
+          if (!value) throw new Error("usage: /mcp tools <server-id>");
+          push(
+            "assistant",
+            JSON.stringify(mcpRef.current.get(value).tools(), null, 2),
+          );
+        } else if (operation === "disconnect") {
+          if (!value) throw new Error("usage: /mcp disconnect <server-id>");
+          await mcpRef.current.disconnect(value);
+          push("assistant", `Disconnected MCP server: ${value}`);
+        } else {
+          throw new Error(
+            "supported commands: /mcp list|connect [config]|tools <server-id>|disconnect <server-id>",
           );
         }
       } catch (error) {

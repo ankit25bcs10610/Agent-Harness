@@ -12,6 +12,17 @@ export type Session = {
   skills?: SkillLifecycleState;
   status: "active" | "completed" | "interrupted" | "failed";
   stopReason?: string;
+  /** Persisted MCP metadata only; credentials and live transport handles are excluded. */
+  mcpServers?: Array<{
+    id: string;
+    transport: "stdio" | "streamable-http";
+    command?: string;
+    args: string[];
+    cwd?: string;
+    url?: string;
+    enabled: boolean;
+    allowedTools: string[];
+  }>;
 };
 
 export type SessionSummary = Pick<

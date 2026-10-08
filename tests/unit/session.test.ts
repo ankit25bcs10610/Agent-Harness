@@ -111,4 +111,22 @@ describe("session persistence", () => {
     const recovered = validateSession({ ...session, skills });
     expect(recovered.skills).toEqual(skills);
   });
+
+  test("persists MCP configuration metadata without credentials or live handles", async () => {
+    directory = await mkdtemp(join(tmpdir(), "chiku-session-"));
+    const session = createSession("mcp");
+    session.mcpServers = [
+      {
+        id: "fixture",
+        transport: "stdio",
+        command: "bun",
+        args: ["server.ts"],
+        enabled: true,
+        allowedTools: ["read"],
+      },
+    ];
+    await saveSession(session, directory);
+    const recovered = await loadSession(session.id, directory);
+    expect(recovered?.mcpServers).toEqual(session.mcpServers);
+  });
 });

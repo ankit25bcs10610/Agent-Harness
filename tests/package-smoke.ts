@@ -48,7 +48,11 @@ try {
     process.platform === "win32" ? "chiku.cmd" : "chiku",
   );
   for (const args of [["--help"], ["--version"]]) {
-    const smoke = Bun.spawn(["bun", executable, ...args], {
+    const command =
+      process.platform === "win32"
+        ? ["cmd.exe", "/d", "/s", "/c", executable, ...args]
+        : ["bun", executable, ...args];
+    const smoke = Bun.spawn(command, {
       stdout: "pipe",
       stderr: "pipe",
     });

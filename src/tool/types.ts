@@ -25,4 +25,8 @@ export type ToolContext = {
   signal: AbortSignal;
   maxOutputChars: number;
   workspace?: WorkspaceExecutionContext;
+  /** Runtime capability boundary for delegated agents. Omitted for normal single-agent mode. */
+  allowedTools?: readonly string[];
+  /** Required contract binding for delegated write tasks. */
+  requiredContractId?: string;
 };

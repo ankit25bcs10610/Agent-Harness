@@ -25,7 +25,11 @@ function statusPaths(status: string) {
   return status
     .split("\n")
     .filter(Boolean)
-    .map((line) => line.slice(3).trim().replace(/^"|"$/g, ""));
+    .map((line) =>
+      (line.startsWith("?? ") ? line.slice(3) : line.slice(2).trimStart())
+        .trim()
+        .replace(/^"|"$/g, ""),
+    );
 }
 
 function untrackedPaths(status: string) {

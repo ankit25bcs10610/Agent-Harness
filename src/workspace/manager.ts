@@ -218,12 +218,14 @@ export class WorkspaceManager {
       workspace.baseCommit,
     ]);
     const statusLines = status ? status.split("\n") : [];
+    const pathFromStatus = (line: string) =>
+      line.startsWith("?? ") ? line.slice(3) : line.slice(2).trimStart();
     const changedFiles = statusLines
       .filter((line) => !line.startsWith("?? "))
-      .map((line) => line.slice(3));
+      .map(pathFromStatus);
     const untrackedFiles = statusLines
       .filter((line) => line.startsWith("?? "))
-      .map((line) => line.slice(3));
+      .map(pathFromStatus);
     return {
       workspaceId: id,
       status,

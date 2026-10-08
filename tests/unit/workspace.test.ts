@@ -13,6 +13,7 @@ import {
   inspectIntegration,
   integrateWorkspace,
 } from "../../src/workspace";
+import { detectAgentConflicts } from "../../src/multiagent";
 import { runTool } from "../../src/tool/registry";
 import type { ToolContext } from "../../src/tool/types";
 
@@ -319,4 +320,25 @@ test("runs a model turn inside the isolated workspace and records completion", a
   expect((await manager.require(workspace.workspaceId)).status).toBe(
     "COMPLETED",
   );
+});
+
+test("detects overlapping files between independent agent workspaces", async () => {
+  await repository();
+  const manager = new WorkspaceManager({
+    repositoryRoot: root,
+    workspaceDirectory: join(root, ".chiku", "workspaces"),
+  });
+  const first = await manager.create({ taskId: "one", sessionId: "session-1" });
+  const second = await manager.create({
+    taskId: "two",
+    sessionId: "session-1",
+  });
+  await writeFile(join(first.worktreePath, "README.md"), "first\n");
+  await writeFile(join(second.worktreePath, "README.md"), "second\n");
+  const conflicts = await detectAgentConflicts(manager, [
+    first.workspaceId,
+    second.workspaceId,
+  ]);
+  expect(conflicts).toHaveLength(1);
+  expect(conflicts[0]?.files).toEqual(["README.md"]);
 });

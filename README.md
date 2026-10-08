@@ -440,12 +440,12 @@ Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of t
 ## Current limitations
 
 - One implemented model provider: OpenRouter.
-- The `test` script is a placeholder with no test suite.
+- The test suite is deterministic and local, but full multi-agent end-to-end acceptance scenarios are still being expanded.
 - No OS-level shell sandbox.
 - Limited editing interface: create-new-file and exact text replacement.
 - Session-scoped in-memory permission rules.
 - Local, unencrypted JSON sessions.
-- Slash commands are prompt shortcuts, not hardcoded pipelines.
+- Most slash commands are prompt shortcuts; workspace and multi-agent diagnostics call runtime services directly.
 - Compaction is lossy.
 
 ## Roadmap
@@ -457,6 +457,8 @@ Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of t
 - Context pruning and model-assisted compaction
 - Local session resume
 - Terminal workflow shortcuts
+- Isolated Git workspaces with bounded agent scheduling
+- Validated multi-agent registry, task graph, communication bus, and session recovery
 
 ### Planned
 
@@ -464,8 +466,26 @@ Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of t
 - Model context-window caching
 - Automated tests for tools, permissions, context, and normalization
 - More explicit provider configuration and adapter boundaries
+- Complete multi-agent review/repair, conflict orchestration, and end-to-end acceptance scenarios
 
 The first two planned items are recorded in [TODO.md](TODO.md).
+
+## Multi-agent orchestration
+
+Chiku includes a bounded multi-agent core that reuses the existing agent loop,
+permissions, workspaces, verification, and sessions. Agent definitions are
+validated with Zod and carry role-specific tools, models, budgets, workspace
+policies, and retry limits. Model-produced task proposals are validated before
+being converted into a cycle-checked dependency graph. Independent tasks can
+run concurrently through separate runtime contexts, while dependent tasks wait
+for successful prerequisites.
+
+The communication bus exchanges versioned structured handoffs rather than
+trusting arbitrary agent text. Multi-agent state is atomically persisted, and
+uncertain running tasks restore as blocked so side-effecting work is never
+blindly replayed. See [docs/MULTI_AGENT.md](docs/MULTI_AGENT.md) and the
+[Prompt 17 tracker](docs/MULTI_AGENT_TRACKER.md) for the implemented boundary
+and remaining work.
 
 ## Contributing
 

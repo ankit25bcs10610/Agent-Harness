@@ -22,6 +22,6 @@
 | Conflict detection                  | TESTED      | Dirty target, stale base, untracked source, and failed apply preflight reports                  |
 | Terminal workspace commands         | IN_PROGRESS | `/workspace` commands are integrated; UI-level interaction tests remain                         |
 | Durable recovery and cleanup        | TESTED      | Atomic records, identity reconciliation, recovery-required state, and safe dirty removal        |
-| End-to-end acceptance/documentation | IN_PROGRESS | Foundational scenarios covered; remaining scenarios are not yet claimed                         |
+| End-to-end acceptance/documentation | IN_PROGRESS | Workspace documentation is complete; Prompt 17 multi-agent scenarios remain to be added          |
 
 Statuses are deliberately conservative: production APIs are not marked complete until connected to the runtime and tested through that connection.

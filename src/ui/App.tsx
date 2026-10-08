@@ -25,6 +25,10 @@ import { Header } from "./Header";
 import { SkillLifecycle } from "../skill/lifecycle";
 import { PATHS } from "../config";
 import { WorkspaceManager, type WorkspaceExecutionContext } from "../workspace";
+import {
+  createDefaultAgentRegistry,
+  MultiAgentCoordinator,
+} from "../multiagent";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -73,6 +77,10 @@ const COMMANDS: Record<string, string> = {
   "/contracts": "List persisted change contracts and their current status.",
   "/workspaces": "List managed Git workspaces.",
   "/workspace": "Manage workspaces: list, create, show, use, status, or diff.",
+  "/agents": "List registered agent roles and their capability policies.",
+  "/agent": "Inspect a registered agent or its current executions.",
+  "/team": "Inspect the multi-agent task graph and execution state.",
+  "/parallel": "Inspect or change the bounded parallel-agent limit.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
 };
@@ -135,6 +143,12 @@ export function App({ systemPrompt, session, config }: Props) {
   );
   const activeWorkspaceRef = useRef<WorkspaceExecutionContext | undefined>(
     undefined,
+  );
+  const agentRegistryRef = useRef(createDefaultAgentRegistry());
+  const coordinatorRef = useRef(
+    new MultiAgentCoordinator(agentRegistryRef.current, {
+      maxActiveAgents: 2,
+    }),
   );
 
   function push(kind: "user" | "assistant" | "error", text: string) {
@@ -250,6 +264,71 @@ export function App({ systemPrompt, session, config }: Props) {
         } else {
           throw new Error(
             "supported workspace commands: list, create, show, use, status, diff, reconcile",
+          );
+        }
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
+    if (
+      localCommand === "/agents" ||
+      localCommand === "/agent" ||
+      localCommand === "/team" ||
+      localCommand === "/parallel"
+    ) {
+      try {
+        const remainder = text.trim().slice(localCommand.length).trim();
+        const [operation = "list", value] = remainder.split(/\s+/, 2);
+        if (
+          localCommand === "/agents" ||
+          (localCommand === "/agent" && operation === "list")
+        ) {
+          push(
+            "assistant",
+            JSON.stringify(agentRegistryRef.current.list(), null, 2),
+          );
+        } else if (localCommand === "/agent" && operation === "info") {
+          if (!value) throw new Error("usage: /agent info <id>");
+          push(
+            "assistant",
+            JSON.stringify(agentRegistryRef.current.get(value), null, 2),
+          );
+        } else if (localCommand === "/agent" && operation === "status") {
+          if (!value) throw new Error("usage: /agent status <id>");
+          push(
+            "assistant",
+            JSON.stringify(
+              coordinatorRef.current
+                .executionSnapshot()
+                .filter((item) => item.agentId === value),
+              null,
+              2,
+            ),
+          );
+        } else if (localCommand === "/team") {
+          const valueToShow =
+            operation === "status"
+              ? coordinatorRef.current.executionSnapshot()
+              : coordinatorRef.current.graphSnapshot();
+          push("assistant", JSON.stringify(valueToShow, null, 2));
+        } else if (localCommand === "/parallel" && operation === "status") {
+          push(
+            "assistant",
+            JSON.stringify(coordinatorRef.current.schedulerSnapshot(), null, 2),
+          );
+        } else if (localCommand === "/parallel" && operation === "limit") {
+          const limit = Number(value);
+          if (!Number.isInteger(limit) || limit < 1)
+            throw new Error("usage: /parallel limit <positive integer>");
+          coordinatorRef.current.setParallelLimit(limit);
+          push("assistant", `Parallel agent limit set to ${limit}`);
+        } else {
+          throw new Error(
+            "supported commands: /agents, /agent list|info|status, /team status|tasks|graph, /parallel status|limit",
           );
         }
       } catch (error) {

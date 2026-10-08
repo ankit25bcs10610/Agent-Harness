@@ -75,6 +75,9 @@ export async function runTool(
   if (!tool) {
     return `Error: unknown tool "${name}"`;
   }
+  if (ctx.allowedTools && !ctx.allowedTools.includes(name)) {
+    return `Not allowed to run tool: ${name}, reason: agent capability policy denies this tool`;
+  }
 
   let jsonParsed: unknown;
   try {
@@ -86,6 +89,19 @@ export async function runTool(
   const parsedArgs = tool.parameters.safeParse(jsonParsed);
   if (!parsedArgs.success) {
     return `Error: invalid arguments for tool "${name}": ${parsedArgs.error.message}`;
+  }
+  if (
+    ctx.requiredContractId &&
+    ["apply_patch", "str_replace", "write_file"].includes(name)
+  ) {
+    const contractId =
+      typeof parsedArgs.data === "object" &&
+      parsedArgs.data !== null &&
+      "contractId" in parsedArgs.data
+        ? (parsedArgs.data as { contractId?: unknown }).contractId
+        : undefined;
+    if (contractId !== ctx.requiredContractId)
+      return `Not allowed to run tool: ${name}, reason: required change contract ${ctx.requiredContractId} is not bound to this task`;
   }
 
   const allowedToRun: Allowed = await checkPermission(

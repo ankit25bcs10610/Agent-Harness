@@ -41,7 +41,12 @@ try {
   ]);
   if (installCode !== 0)
     throw new Error(`npm install failed: ${installOutput}`);
-  const executable = join(temporary, "node_modules", ".bin", "chiku");
+  const executable = join(
+    temporary,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "chiku.cmd" : "chiku",
+  );
   for (const args of [["--help"], ["--version"]]) {
     const smoke = Bun.spawn(["bun", executable, ...args], {
       stdout: "pipe",

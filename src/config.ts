@@ -18,10 +18,10 @@ export const TOOLS = {
 };
 
 // project-local storage
-const AGENT_HARNESS_DIR = `${process.cwd()}/.agent-harness`;
+const CHIKU_DIR = `${process.cwd()}/.chiku`;
 export const PATHS = {
-  skillsDir: `${AGENT_HARNESS_DIR}/skills`,
-  sessionsDir: `${AGENT_HARNESS_DIR}/sessions`,
+  skillsDir: `${CHIKU_DIR}/skills`,
+  sessionsDir: `${CHIKU_DIR}/sessions`,
 };
 
 // display only

@@ -23,5 +23,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Agent Harness local state
-.agent-harness/sessions/
+# Chiku local state
+.chiku/sessions/

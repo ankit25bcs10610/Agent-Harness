@@ -1,6 +1,6 @@
-# Agent Harness
+# Chiku
 
-Agent Harness is a terminal-first AI coding agent built with TypeScript, React, and Ink. It connects an OpenRouter model to a controlled set of project tools so the agent can inspect a repository, plan changes, edit files, run commands, and present results in an interactive terminal session.
+Chiku is a terminal-first AI coding agent built with TypeScript, React, and Ink. It connects an OpenRouter model to a controlled set of project tools so the agent can inspect a repository, plan changes, edit files, run commands, and present results in an interactive terminal session.
 
 The project is designed as a small, understandable agent runtime: provider communication, the agent loop, context management, tool execution, permissions, persistence, and presentation are separated into focused modules.
 
@@ -69,13 +69,13 @@ The agent currently exposes the following tools:
 - `read_file` — reads a bounded range of a text file and reports whether the result was truncated.
 - `write_file` — creates a new file and refuses to overwrite an existing file.
 - `str_replace` — replaces one exact, unique text span in an existing file.
-- `load_skill` — loads a named project skill from `.agent-harness/skills/` without allowing path traversal.
+- `load_skill` — loads a named project skill from `.chiku/skills/` without allowing path traversal.
 
 Tool arguments are defined with Zod schemas, normalized into the provider’s tool format, and returned to the loop as typed tool messages.
 
 ## Permission model
 
-Agent Harness treats tool execution as a policy decision rather than an unconditional capability.
+Chiku treats tool execution as a policy decision rather than an unconditional capability.
 
 - Read-only tools do not require an interactive permission decision.
 - Project edits are allowed only inside the project root and otherwise require explicit approval.
@@ -136,7 +136,7 @@ Run the entry point directly when needed:
 bun src/index.tsx
 ```
 
-Sessions are stored locally as JSON under `.agent-harness/sessions/`.
+Sessions are stored locally as JSON under `.chiku/sessions/`.
 
 ## Configuration
 
@@ -191,7 +191,7 @@ There is currently no automated test script configured in `package.json`. Type c
 - Never commit `OPENROUTER_API_KEY` or other credentials.
 - Treat model-generated shell commands and file edits as untrusted until reviewed.
 - Keep permission prompts enabled for destructive commands and edits outside the project root.
-- Session JSON may contain conversation content; protect the local `.agent-harness/` directory appropriately.
+- Session JSON may contain conversation content; protect the local `.chiku/` directory appropriately.
 - The OpenRouter API and selected model determine external data handling, cost, rate limits, and availability.
 
 ## License

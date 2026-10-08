@@ -1,7 +1,7 @@
 {
-  "name": "agent-harness",
+  "name": "chiku",
   "version": "1.0.0",
-  "description": "A terminal-based AI coding agent harness",
+  "description": "A terminal-based AI coding agent",
   "license": "MIT",
   "author": "Ankit Pandey",
   "type": "module",

@@ -21,6 +21,7 @@ import { StatusBar } from "./StatusBar";
 import { createWorkflowController } from "../workflow/verify";
 import { runTool } from "../tool/registry";
 import type { ContextDiagnostics } from "../context/types";
+import { Header } from "./Header";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -92,6 +93,8 @@ export function App({ systemPrompt, session, config }: Props) {
   const [running, setRunning] = useState(false);
   const [contextDiagnostics, setContextDiagnostics] =
     useState<ContextDiagnostics>();
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   // finished items are printed once at the current width; after a resize, clear and reprint them
   useEffect(() => {
@@ -150,6 +153,8 @@ export function App({ systemPrompt, session, config }: Props) {
     abortRef.current = controller;
     push("user", text);
     setInput("");
+    setHistory((previous) => [...previous.slice(-49), text]);
+    setHistoryIndex(-1);
     liveRef.current = "";
     setLiveText("");
     setLiveReasoning("");
@@ -301,12 +306,33 @@ export function App({ systemPrompt, session, config }: Props) {
       return;
     }
 
+    if (key.upArrow && !running && history.length) {
+      const next = Math.min(historyIndex + 1, history.length - 1);
+      setHistoryIndex(next);
+      setInput(history[history.length - 1 - next] ?? "");
+      return;
+    }
+    if (key.downArrow && !running && historyIndex >= 0) {
+      const next = historyIndex - 1;
+      setHistoryIndex(next);
+      setInput(next < 0 ? "" : (history[history.length - 1 - next] ?? ""));
+      return;
+    }
+
     if (key.ctrl && char === "c") {
       if (running) abortRef.current?.abort();
       else exit();
       return;
     }
     if (running) return;
+    if (key.ctrl && char === "u") {
+      setInput("");
+      return;
+    }
+    if (key.shift && key.return) {
+      setInput((previous) => `${previous}\n`);
+      return;
+    }
     if (key.return) {
       const text = input.trim();
       if (text) void submit(text);
@@ -325,9 +351,20 @@ export function App({ systemPrompt, session, config }: Props) {
     (lastPromptTokens / config.contextWindow) * 100,
   );
   const status = ask ? "waiting for permission" : running ? "running" : "idle";
+  const suggestions = input.startsWith("/")
+    ? Object.keys(COMMANDS)
+        .filter((command) => command.startsWith(input.split(/\s/, 1)[0] ?? ""))
+        .slice(0, 6)
+    : [];
 
   return (
     <>
+      <Header
+        model={config.loopModel}
+        session={sessionRef.current.title}
+        workspace={process.cwd()}
+        status={status}
+      />
       <Static key={resizeKey} items={items}>
         {(item) => (
           // Static lays items out without a width limit, so give each one the terminal width
@@ -367,6 +404,16 @@ export function App({ systemPrompt, session, config }: Props) {
           </Text>
         </Box>
       </Box>
+      {suggestions.length > 0 ? (
+        <Box marginLeft={2} flexDirection="column">
+          <Text dimColor>commands</Text>
+          {suggestions.map((command) => (
+            <Text key={command} color="gray">
+              {command} — {COMMANDS[command]}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
 
       <StatusBar
         model={config.loopModel}

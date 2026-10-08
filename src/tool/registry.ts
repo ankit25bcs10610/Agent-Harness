@@ -6,6 +6,9 @@ import { loadSkill } from "./tools/load_skill";
 import { fileRead } from "./tools/read_file";
 import { strReplace } from "./tools/str_replace";
 import { fileWrite } from "./tools/write_file";
+import { listFiles } from "./tools/list_files";
+import { searchFiles } from "./tools/search_files";
+import { searchSymbols } from "./tools/search_symbols";
 import { truncateStrings } from "./truncate_tool";
 import type { Tool, ToolContext } from "./types";
 import z from "zod";
@@ -16,6 +19,9 @@ const tools: Tool<any, unknown>[] = [
   strReplace,
   fileWrite,
   loadSkill,
+  listFiles,
+  searchFiles,
+  searchSymbols,
 ];
 
 export const registry: Record<string, Tool<any, unknown>> = Object.fromEntries(

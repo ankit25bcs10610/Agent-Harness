@@ -181,10 +181,23 @@ export function App({ systemPrompt, session, config }: Props) {
             );
           },
         },
+        checkpoint: async (state) => {
+          sessionRef.current.state = state;
+          sessionRef.current.status = "active";
+          sessionRef.current.updatedAt = Date.now().toString();
+          await saveSession(sessionRef.current);
+        },
       });
 
       sessionRef.current.state = result.state;
       sessionRef.current.updatedAt = Date.now().toString();
+      sessionRef.current.status =
+        result.stopReason === "stop"
+          ? "completed"
+          : result.stopReason === "interrupted"
+            ? "interrupted"
+            : "failed";
+      sessionRef.current.stopReason = result.stopReason;
       if (sessionRef.current.title === "") {
         sessionRef.current.title = text.slice(0, UI.titleMaxChars);
       }

@@ -60,6 +60,14 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     tokensUsed,
     usageIncomplete,
   });
+  const currentState = () => ({
+    messages,
+    view: lastMessageView,
+    summary: previousSummary,
+    summarizedUpTo: previousSummarizedUpTo,
+    lastPromptTokens,
+    execution: execution(),
+  });
 
   const finish = async (stopReason: StopReason): Promise<LoopOutput> => {
     if (stopReason === "interrupted") {
@@ -73,14 +81,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     )
       setLifecycle("failure");
     else setLifecycle("completion");
-    const state = {
-      messages,
-      view: lastMessageView,
-      summary: previousSummary,
-      summarizedUpTo: previousSummarizedUpTo,
-      lastPromptTokens,
-      execution: execution(),
-    };
+    const state = currentState();
     if (input.checkpoint) {
       await input.checkpoint(state);
       emit({ type: "checkpoint", at: Date.now() });
@@ -202,6 +203,10 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
               result: result.content,
               at: Date.now(),
             });
+        }
+        if (input.checkpoint) {
+          await input.checkpoint(currentState());
+          emit({ type: "checkpoint", at: Date.now() });
         }
         if (ctx.signal.aborted) return finish("interrupted");
         if (overWallClock()) return finish("wall_clock");

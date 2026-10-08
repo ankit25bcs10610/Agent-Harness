@@ -175,6 +175,12 @@ Each turn exposes typed lifecycle events: `initializing`, `reasoning`, `tool_dis
 
 Provider failures terminate the current turn with a typed recovery-oriented stop reason and a checkpointable state; they do not recursively restart the loop. Tool calls are dispatched only after a complete assistant response has been validated, and each tool result retains its original `toolCallId`. Unknown or malformed calls become a controlled failure instead of being inserted as unrelated messages.
 
+### Session recovery
+
+Sessions are versioned JSON records with stable UUIDs, names, titles, lifecycle status, stop reason, loop messages, tool-call IDs/results, and execution statistics. `listSessions`, `loadSession`, `createNamedSession`, `deleteSession`, and `cleanupSessions` provide a future session-picker boundary. Writes use a temporary file followed by rename; a valid orphaned `.json.tmp` is recovered only when its final JSON file is absent, while existing sessions are never silently deleted.
+
+On load, incompatible or corrupt records are skipped. Legacy version `0` records are migrated in memory. If an assistant tool call has no persisted result, recovery appends a non-executing recovery result tied to the original call ID, preventing the tool from being replayed merely because the process was interrupted. Retention cleanup is opt-in and does nothing unless limits are configured.
+
 ## Technical architecture
 
 | Path              | Responsibility                                                                                         | Interaction                                                |
@@ -187,7 +193,7 @@ Provider failures terminate the current turn with a typed recovery-oriented stop
 | `src/tool/`       | Tool contract, registry, schemas, execution, and truncation.                                           | Receives model calls.                                      |
 | `src/process/`    | Controlled process execution, cancellation, output limits, environment filtering, and isolation hooks. | Used by `bash`.                                            |
 | `src/permission/` | Command/path policy, allowlists, and user decisions.                                                   | Wraps sensitive tool execution.                            |
-| `src/session/`    | Session creation, atomic JSON writes, and latest-session loading.                                      | Persists loop state.                                       |
+| `src/session/`    | Versioned named sessions, validation, atomic writes, recovery, retention, and latest-session loading.  | Persists loop state.                                       |
 | `src/ui/`         | Ink components, input, Markdown, history, status, and approvals.                                       | Starts runs and renders events.                            |
 
 Only OpenRouter is implemented as a provider today. The provider types and normalization boundary are the extension point for a future adapter. There is no generic plugin system yet.
@@ -197,6 +203,9 @@ Only OpenRouter is implemented as a provider today. The provider types and norma
 | Tool          | Arguments                                         | Behavior                                                                               | Permission model                                                                |
 | ------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `bash`        | `command`, optional `shell`, `cwd`, limits, `env` | Runs a controlled non-interactive process with structured output and failure metadata. | Central execute authorization; destructive/high-risk commands require approval. |
+| `list_files`  | `path`, glob/exclusions, limits, cursor          | Lists bounded file metadata and supports continuation pages.                    | Capability `read`; canonical workspace path; skips sensitive/default excluded trees. |
+| `search_files`| `query`, optional regex/glob/path, limits, cursor | Uses ripgrep when available and returns path, line, column, and matching text.  | Capability `read`; gitignore-aware and bounded by result/character/time limits. |
+| `search_symbols` | optional symbol name/path/glob/limits          | Finds common source declarations with a lightweight language-agnostic pattern. | Capability `read`; source globs and the same workspace boundaries. |
 | `read_file`   | `path`, optional `offset`, `limit`                | Reads bounded text lines; default limit is 2,000.                                      | Capability `read`; hidden paths ask and sensitive paths deny.                   |
 | `write_file`  | `path`, `content`                                 | Creates parent directories and a new file; refuses overwrite.                          | Capability `create`; canonical workspace path required.                         |
 | `str_replace` | `path`, `oldString`, `newString`                  | Replaces exactly one occurrence; fails on zero or multiple matches.                    | Capability `modify`; canonical path and symlink re-check.                       |

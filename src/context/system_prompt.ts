@@ -16,6 +16,7 @@ export const generateSystemPrompt = async (): Promise<SystemMessage> => {
   const TOOLS = `# TOOLS:
 - Tool errors come back as text starting with "Error". Read them, fix the cause, then retry. Never repeat the same failing call.
 - If output says [truncated] or [Tool output pruned], rerun with a narrower query.
+- Use list_files for bounded repository navigation, search_files for text/regex searches, and search_symbols for lightweight declarations. Prefer pagination and narrow globs; do not read the whole repository.
 `;
 
   const RULES = `# WORKING RULES:

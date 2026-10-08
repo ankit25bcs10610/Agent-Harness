@@ -147,7 +147,9 @@ export async function buildRepositoryIndex(
   options: IntelligenceOptions,
   signal: AbortSignal,
 ): Promise<RepositoryIndex> {
+  const started = performance.now();
   const root = await realpath(options.root);
+  const listedStarted = performance.now();
   const listed = await listRepositoryFiles(
     {
       root,
@@ -156,6 +158,11 @@ export async function buildRepositoryIndex(
     },
     signal,
   );
+  options.onMetric?.({
+    name: "repository.list",
+    durationMs: performance.now() - listedStarted,
+    items: listed.results.length,
+  });
   const files = listed.results.filter(
     (file) =>
       language(file.path) !== "unknown" &&
@@ -166,6 +173,7 @@ export async function buildRepositoryIndex(
   const edges: RepositoryIndex["edges"] = [];
   const errors: string[] = [];
   const hashes = new Map<string, string>();
+  const parseStarted = performance.now();
   for (const file of files) {
     if (signal.aborted) throw new Error("repository indexing cancelled");
     try {
@@ -189,7 +197,12 @@ export async function buildRepositoryIndex(
       );
     }
   }
-  return {
+  options.onMetric?.({
+    name: "repository.parse",
+    durationMs: performance.now() - parseStarted,
+    items: files.length,
+  });
+  const result: RepositoryIndex = {
     root,
     createdAt: new Date().toISOString(),
     files: files.map((file) => ({
@@ -202,6 +215,12 @@ export async function buildRepositoryIndex(
     edges,
     errors,
   };
+  options.onMetric?.({
+    name: "repository.index",
+    durationMs: performance.now() - started,
+    items: result.files.length,
+  });
+  return result;
 }
 export function findSymbols(
   index: RepositoryIndex,
@@ -338,14 +357,12 @@ export function analyzeImpact(
   for (const path of paths)
     for (const dependent of findDependents(index, path, depth))
       affected.add(dependent);
-  return [...affected]
-    .sort()
-    .map((path) => ({
-      path,
-      direct: paths.includes(path),
-      reason: paths.includes(path) ? "changed file" : "imports a changed file",
-      symbols: index.symbols
-        .filter((symbol) => symbol.path === path)
-        .map((symbol) => symbol.id),
-    }));
+  return [...affected].sort().map((path) => ({
+    path,
+    direct: paths.includes(path),
+    reason: paths.includes(path) ? "changed file" : "imports a changed file",
+    symbols: index.symbols
+      .filter((symbol) => symbol.path === path)
+      .map((symbol) => symbol.id),
+  }));
 }

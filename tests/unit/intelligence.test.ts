@@ -43,6 +43,25 @@ test("indexes TypeScript symbols and observed relative imports", async () => {
   ).toBe(true);
 });
 
+test("repository indexing emits opt-in phase metrics", async () => {
+  const root = await mkdtemp(join(tmpdir(), "chiku-intelligence-metrics-"));
+  try {
+    await writeFile(join(root, "main.ts"), "export const value = 1;\n");
+    const metrics: string[] = [];
+    await buildRepositoryIndex(
+      { root, onMetric: (metric) => metrics.push(metric.name) },
+      new AbortController().signal,
+    );
+    expect(metrics).toEqual([
+      "repository.list",
+      "repository.parse",
+      "repository.index",
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("persists atomically and rejects corrupted indexes", async () => {
   root = await mkdtemp(join(tmpdir(), "chiku-intelligence-"));
   const path = join(root, "index.json");

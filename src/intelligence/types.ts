@@ -43,6 +43,11 @@ export type IntelligenceOptions = {
   maxFiles?: number;
   maxFileBytes?: number;
   exclude?: string[];
+  onMetric?: (metric: {
+    name: "repository.list" | "repository.parse" | "repository.index";
+    durationMs: number;
+    items: number;
+  }) => void;
 };
 export type IndexChanges = {
   added: string[];

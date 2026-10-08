@@ -95,6 +95,10 @@ OpenRouter is an external, potentially billable service. Requests are subject to
 
 Type a natural-language task at the `>` prompt and press Enter. Chiku renders streamed assistant text, a compact reasoning tail, active tool calls, Markdown, context usage, session title, and status.
 
+![Chiku terminal UI](assets/chiku-terminal-demo.png)
+
+_Illustrative working session: Chiku inspects a project and presents the result in the terminal._
+
 Illustrative session:
 
 ```text

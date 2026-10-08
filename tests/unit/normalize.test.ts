@@ -80,16 +80,23 @@ describe("provider normalization", () => {
     expect(result.stats.totalTokens).toBe(7);
   });
 
-  test("rejects missing usage and malformed finish reasons", async () => {
-    expect(() =>
-      normalize({
-        choices: [{ finishReason: "stop", message: { content: "ok" } }],
-      } as never),
-    ).toThrow("Error fetching stats");
+  test("uses safe partial usage defaults and rejects malformed streams", async () => {
+    const result = normalize({
+      choices: [{ finishReason: "stop", message: { content: "ok" } }],
+    } as never);
+    expect(result.stats).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      usageComplete: false,
+    });
     await expect(
       normalizeStream([
         { choices: [{ delta: {}, finishReason: "unknown" }] },
       ] as never),
     ).rejects.toThrow("Non-standard finish reason");
+    await expect(
+      normalizeStream([{ choices: [{ delta: {} }] }] as never),
+    ).rejects.toThrow("finish reason");
   });
 });

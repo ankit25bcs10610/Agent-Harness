@@ -262,6 +262,18 @@ The loop has `maxIterations: 20` and `maxTokens: 200000`. Provider requests curr
 
 `normalize.ts` converts provider choices to internal messages, normalizes finish reasons and usage statistics, and reconstructs streamed content and tool-call fragments. `model.ts` discovers the selected model’s context length from OpenRouter and uses the configured fallback after a failure or timeout.
 
+Provider failures are classified as `aborted`, `timeout`, `network`, `rate_limit`, `server`, `authentication`, `invalid_request`, `malformed_response`, or `incomplete_response`. Retry behavior is bounded and only applies to transient network, timeout, server, and rate-limit failures. Backoff uses exponential delay with jitter and honors `Retry-After` when supplied. Abort signals cancel both the request and any retry delay. Missing usage fields become safe zero-valued statistics with `usageComplete: false`; they do not crash the loop.
+
+| Failure condition                                                      | Classification | Recovery                                                          | Tool-action safety                                                 |
+| ---------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Network failure, timeout, 5xx, 408/409/425/429                         | Retryable      | Bounded retry with backoff/jitter; `Retry-After` takes precedence | No tool dispatch occurs until a completion normalizes successfully |
+| Abort or user interruption                                             | Non-retryable  | Stop immediately and propagate interruption                       | No replay of tool actions                                          |
+| 401/403 or other 4xx request rejection                                 | Non-retryable  | Surface the typed provider error                                  | No tool dispatch                                                   |
+| Missing choices, invalid finish reason, malformed/incomplete tool call | Non-retryable  | Fail the provider request                                         | No partial tool call is dispatched                                 |
+| Missing/partial usage                                                  | Recoverable    | Use zero/fallback totals and mark `usageComplete: false`          | No effect on tool dispatch                                         |
+
+`ProviderOptions` supports request timeout, retry policy, redacted structured logging, and a `ModelFallbackResolver` extension point. Automatic model fallback is intentionally not enabled: a caller must explicitly choose when and how a different model is acceptable.
+
 | Role         | Current model     |
 | ------------ | ----------------- |
 | Primary loop | `openai/gpt-4o`   |

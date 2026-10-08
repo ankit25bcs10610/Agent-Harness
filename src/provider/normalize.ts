@@ -20,6 +20,7 @@ import type {
   ToolCall,
   ToolSpec,
 } from "./types";
+import { ProviderError } from "./errors";
 
 // as ChatFinishReasonEnum is an OpenEnum, it can consider unwanted values
 function normalizeFinishReason(raw: string | null): FinishReason {
@@ -35,25 +36,50 @@ function normalizeFinishReason(raw: string | null): FinishReason {
     case "error":
       return "error";
     default:
-      throw new Error("Non-standard finish reason");
+      throw new ProviderError(
+        "Non-standard finish reason",
+        "malformed_response",
+        false,
+      );
   }
 }
 
 function normalizeStats(usage: ChatUsage | undefined): Statistics {
-  if (usage) {
-    return {
-      promptTokens: usage.promptTokens,
-      completionTokens: usage.completionTokens,
-      totalTokens: usage.totalTokens,
-    };
-  }
-  throw new Error("Error fetching stats");
+  const promptTokens = usage?.promptTokens ?? 0;
+  const completionTokens = usage?.completionTokens ?? 0;
+  const totalTokens = usage?.totalTokens ?? promptTokens + completionTokens;
+  const complete =
+    typeof usage?.promptTokens === "number" &&
+    typeof usage?.completionTokens === "number" &&
+    typeof usage?.totalTokens === "number";
+  if (complete) return { promptTokens, completionTokens, totalTokens };
+  return { promptTokens, completionTokens, totalTokens, usageComplete: false };
 }
 
 function normalizeToolCalls(raw: ChatToolCall[] | undefined): ToolCall[] {
   let result: ToolCall[] = [];
   if (raw) {
     for (const tool of raw) {
+      if (
+        !tool.id ||
+        !tool.function?.name ||
+        typeof tool.function.arguments !== "string"
+      ) {
+        throw new ProviderError(
+          "Incomplete tool call",
+          "incomplete_response",
+          false,
+        );
+      }
+      try {
+        JSON.parse(tool.function.arguments);
+      } catch {
+        throw new ProviderError(
+          "Malformed tool arguments",
+          "malformed_response",
+          false,
+        );
+      }
       result.push({
         toolCallId: tool.id,
         name: tool.function.name,
@@ -65,26 +91,43 @@ function normalizeToolCalls(raw: ChatToolCall[] | undefined): ToolCall[] {
 }
 
 function normalizeAssistantMessage(choice: ChatChoice): AssistantMessage {
-  const msg = choice.message.content;
-  if (choice) {
+  const msg = choice.message?.content;
+  if (choice.message) {
     return {
       type: "assistant",
       content: typeof msg === "string" ? msg : null,
       toolCalls: normalizeToolCalls(choice.message.toolCalls),
     };
   }
-  throw new Error("Invalid message content format");
+  throw new ProviderError(
+    "Invalid assistant message",
+    "malformed_response",
+    false,
+  );
 }
 
 export function normalize(completion: ChatResult): ProviderResponse {
   const choice = completion.choices[0];
   if (!choice) {
-    throw new Error("Did not receive correct response");
+    throw new ProviderError(
+      "Provider response contained no choices",
+      "malformed_response",
+      false,
+    );
   }
 
+  const message = normalizeAssistantMessage(choice);
+  const finishReason = normalizeFinishReason(choice.finishReason);
+  if (finishReason === "tool_calls" && !message.toolCalls?.length) {
+    throw new ProviderError(
+      "Tool-call finish reason contained no tool calls",
+      "incomplete_response",
+      false,
+    );
+  }
   return {
-    message: normalizeAssistantMessage(choice),
-    finishReason: normalizeFinishReason(choice.finishReason),
+    message,
+    finishReason,
     stats: normalizeStats(completion.usage),
   };
 }
@@ -140,7 +183,12 @@ export async function normalizeStream(
   const calls: { id: string; name: string; args: string }[] = [];
 
   for await (const chunk of stream) {
-    if (chunk.error) throw new Error(`Stream error: ${chunk.error.message}`);
+    if (chunk.error)
+      throw new ProviderError(
+        `Stream error: ${chunk.error.message}`,
+        "server",
+        true,
+      );
     if (chunk.usage) usage = chunk.usage;
 
     const choice = chunk.choices[0];
@@ -164,11 +212,33 @@ export async function normalizeStream(
     if (choice.finishReason) rawFinish = choice.finishReason;
   }
 
-  const toolCalls: ToolCall[] = calls.map((c) => ({
-    toolCallId: c.id,
-    name: c.name,
-    arguments: c.args,
-  }));
+  if (!rawFinish) {
+    throw new ProviderError(
+      "Provider stream ended without a finish reason",
+      "incomplete_response",
+      false,
+    );
+  }
+
+  const toolCalls: ToolCall[] = calls.map((c) => {
+    if (!c.id || !c.name || !c.args) {
+      throw new ProviderError(
+        "Incomplete streamed tool call",
+        "incomplete_response",
+        false,
+      );
+    }
+    try {
+      JSON.parse(c.args);
+    } catch {
+      throw new ProviderError(
+        "Malformed streamed tool arguments",
+        "malformed_response",
+        false,
+      );
+    }
+    return { toolCallId: c.id, name: c.name, arguments: c.args };
+  });
 
   return {
     message: { type: "assistant", content: text || null, toolCalls },

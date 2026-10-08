@@ -13,9 +13,10 @@ export type FinishReason =
   "tool_calls" | "stop" | "length" | "content_filter" | "error";
 
 export type Statistics = {
-  promptTokens: number; // input tokens (sent by messages array)
-  completionTokens: number; // output tokens: what model generated (assistant text + tool call tokens)
+  promptTokens: number; // zero when the provider omits usage
+  completionTokens: number;
   totalTokens: number;
+  usageComplete?: boolean;
 };
 
 export type ProviderResponse = {
@@ -62,7 +63,25 @@ export type CompleteFunc = (
   tools: ToolSpec[],
   signal: AbortSignal,
   model: string,
+  options?: ProviderOptions,
 ) => Promise<ProviderResponse>;
+
+export type ProviderOptions = {
+  timeoutMs?: number;
+  retry?: Partial<import("./retry").RetryPolicy>;
+  logger?: ProviderLogger;
+  fallback?: ModelFallbackResolver;
+};
+
+/** Explicit extension point; automatic model switching is intentionally disabled. */
+export type ModelFallbackResolver = {
+  resolve: (primaryModel: string, error: unknown) => string | undefined;
+};
+
+export type ProviderLogger = {
+  warn?: (event: string, details: Record<string, unknown>) => void;
+  error?: (event: string, details: Record<string, unknown>) => void;
+};
 
 export type StreamCallbacks = {
   onText?: (chunk: string) => void;
@@ -76,4 +95,5 @@ export type CompleteStreamFunc = (
   signal: AbortSignal,
   model: string,
   callbacks?: StreamCallbacks,
+  options?: ProviderOptions,
 ) => Promise<ProviderResponse>;

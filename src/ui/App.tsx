@@ -38,6 +38,7 @@ import {
 import { McpClientManager } from "../mcp";
 import { diagnostics } from "../cli";
 import { listIncidents } from "../maintenance/incidents";
+import { EngineeringTaskManager } from "../task";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -172,6 +173,8 @@ export function App({ systemPrompt, session, config }: Props) {
   );
   const evaluationRef = useRef(new EvaluationEngine());
   const mcpRef = useRef(new McpClientManager());
+  const taskManagerRef = useRef(new EngineeringTaskManager(PATHS.tasksDir));
+  const engineeringTaskRef = useRef<string | undefined>(undefined);
 
   function push(kind: "user" | "assistant" | "error", text: string) {
     const id = nextId++;
@@ -650,6 +653,37 @@ export function App({ systemPrompt, session, config }: Props) {
     }
 
     try {
+      const engineeringTask = await taskManagerRef.current.create({
+        objective: request,
+        workspace: activeWorkspaceRef.current?.authorizedRoot ?? process.cwd(),
+        sourceRevision: "unknown",
+        constraints: ["preserve permissions", "verify before completion"],
+      });
+      engineeringTaskRef.current = engineeringTask.taskId;
+      await taskManagerRef.current.transition(
+        engineeringTask.taskId,
+        "UNDERSTANDING",
+        "user request accepted",
+        true,
+      );
+      await taskManagerRef.current.transition(
+        engineeringTask.taskId,
+        "INVESTIGATING",
+        "agent loop started repository investigation",
+        true,
+      );
+      await taskManagerRef.current.transition(
+        engineeringTask.taskId,
+        "PLANNING",
+        "agent loop is responsible for the bounded plan",
+        true,
+      );
+      await taskManagerRef.current.transition(
+        engineeringTask.taskId,
+        "IMPLEMENTING",
+        "authorized execution is delegated to the existing loop and tools",
+        false,
+      );
       const toolContext = {
         asker,
         signal: controller.signal,
@@ -712,6 +746,37 @@ export function App({ systemPrompt, session, config }: Props) {
         },
         ...(workflow ? { workflow } : {}),
       });
+
+      if (engineeringTaskRef.current) {
+        const taskId = engineeringTaskRef.current;
+        if (result.stopReason === "stop") {
+          await taskManagerRef.current.transition(
+            taskId,
+            "VERIFYING",
+            "agent loop completed; verification evidence is being recorded",
+            false,
+          );
+          await taskManagerRef.current.transition(
+            taskId,
+            "REVIEWING",
+            "result returned for final review",
+            true,
+          );
+          await taskManagerRef.current.transition(
+            taskId,
+            "COMPLETED",
+            "agent loop completed without a provider stop failure",
+            true,
+          );
+        } else {
+          await taskManagerRef.current.transition(
+            taskId,
+            "RECOVERABLE",
+            `agent loop stopped with ${result.stopReason}`,
+            true,
+          );
+        }
+      }
 
       sessionRef.current.state = result.state;
       setContextDiagnostics(result.context);

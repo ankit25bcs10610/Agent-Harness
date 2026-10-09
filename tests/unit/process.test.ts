@@ -92,7 +92,7 @@ test("fails closed when requested isolation is unavailable", async () => {
 
 test("secure execution uses the OS backend or fails closed when the host rejects it", async () => {
   const result = await new ProcessExecutor().run({
-    command: "printf secure",
+    command: "/usr/bin/printf secure",
     requireIsolation: true,
   });
   expect(

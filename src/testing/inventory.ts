@@ -1,5 +1,5 @@
 import { access, readdir, readFile } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 import { discoverVerificationCommands } from "../workflow/verify";
 import type {
   FrameworkDetection,
@@ -19,6 +19,10 @@ const ignored = new Set([
 ]);
 const testName = /(?:test|it|describe)\s*\(\s*["'`]([^"'`]+)["'`]/g;
 
+function portableRelative(root: string, path: string) {
+  return relative(root, path).split(sep).join("/");
+}
+
 async function walk(root: string, current = root): Promise<string[]> {
   const entries = await readdir(current, { withFileTypes: true });
   const result: string[] = [];
@@ -28,9 +32,9 @@ async function walk(root: string, current = root): Promise<string[]> {
     if (entry.isDirectory()) result.push(...(await walk(root, path)));
     else if (
       /\.(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name) ||
-      /(?:^|\/)(?:tests?|__tests__)\//.test(relative(root, path))
+      /(?:^|\/)(?:tests?|__tests__)\//.test(portableRelative(root, path))
     )
-      result.push(relative(root, path));
+      result.push(portableRelative(root, path));
   }
   return result.sort();
 }

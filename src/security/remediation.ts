@@ -1,5 +1,5 @@
 import { readFile, readdir, realpath } from "node:fs/promises";
-import { join, relative, resolve, isAbsolute } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parsePatch, applyPatch } from "../patch/engine";
 import { inspectProject } from "../modernization/inspect";
 import type { DependencyRecord } from "../modernization/types";
@@ -80,6 +80,10 @@ function within(root: string, path: string) {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+function portableRelative(root: string, path: string) {
+  return relative(root, path).split(sep).join("/");
+}
+
 export async function validateSecurityScope(
   input: SecurityScope,
 ): Promise<ValidatedSecurityScope> {
@@ -111,7 +115,7 @@ async function filesInScope(scope: ValidatedSecurityScope) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (ignored.has(entry.name) || entry.name.startsWith(".")) continue;
       const absolute = join(directory, entry.name);
-      const rel = relative(scope.root, absolute);
+      const rel = portableRelative(scope.root, absolute);
       if (
         scope.excludedPaths.some(
           (excluded) => rel === excluded || rel.startsWith(`${excluded}/`),

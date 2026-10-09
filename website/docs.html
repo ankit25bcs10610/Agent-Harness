@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Chiku developer documentation." />
+    <title>Chiku documentation</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#docs-main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="/"
+        ><span class="brand-mark">χ</span><span>Chiku docs</span></a
+      >
+      <nav aria-label="Documentation navigation">
+        <a href="/">Home</a
+        ><a href="https://github.com/ankit25bcs10610/Agent-Harness">GitHub</a>
+      </nav>
+    </header>
+    <main id="docs-main" class="section-shell docs-page">
+      <p class="eyebrow">SOURCE-LINKED DOCUMENTATION</p>
+      <h1>Learn Chiku from the repository.</h1>
+      <p class="hero-lede">
+        Search the current README and Markdown guides. Results are generated
+        locally from checked-in files.
+      </p>
+      <label class="search-label" for="docs-search">Search documentation</label
+      ><input
+        id="docs-search"
+        class="docs-search"
+        type="search"
+        placeholder="Try: permissions, provider, workspace"
+        autocomplete="off"
+      />
+      <p id="docs-status" class="muted" role="status"></p>
+      <section
+        id="docs-results"
+        class="doc-results"
+        aria-live="polite"
+      ></section>
+    </main>
+    <script type="module" src="/docs.js"></script>
+  </body>
+</html>

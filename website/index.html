@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Chiku is a terminal-native AI coding agent for exploring repositories, changing code, and verifying results."
+    />
+    <meta property="og:title" content="Chiku — AI coding in the terminal" />
+    <meta
+      property="og:description"
+      content="Explore codebases, make controlled changes, and verify results from your terminal."
+    />
+    <meta property="og:type" content="website" />
+    <title>Chiku — AI coding in the terminal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Chiku home"
+        ><span class="brand-mark">χ</span><span>Chiku</span></a
+      >
+      <nav aria-label="Primary navigation">
+        <a href="#features">Features</a><a href="#architecture">Architecture</a
+        ><a href="#docs">Docs</a><a href="#install">Install</a>
+      </nav>
+      <div class="header-actions">
+        <button id="theme-toggle" type="button" aria-label="Toggle color theme">
+          ◐</button
+        ><a
+          class="button button-small"
+          href="https://github.com/ankit25bcs10610/Agent-Harness"
+          >GitHub</a
+        >
+      </div>
+    </header>
+    <main id="main">
+      <section id="top" class="hero section-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">TERMINAL-NATIVE · OPEN SOURCE · CONTROLLED</p>
+          <h1>Code with intelligence.<br /><em>Ship with control.</em></h1>
+          <p class="hero-lede">
+            Chiku helps you understand repositories, change code, and verify
+            results while keeping tool execution visible and permission-aware.
+          </p>
+          <div class="hero-actions">
+            <a class="button" href="#install">Install locally <span>↘</span></a
+            ><a class="text-link" href="#docs">Read the docs →</a>
+          </div>
+          <p class="availability">
+            <span class="status-dot"></span>Local development release · Bun 1.x
+          </p>
+        </div>
+        <div
+          class="terminal-card"
+          aria-label="Illustrative Chiku terminal transcript"
+        >
+          <div class="terminal-top">
+            <span></span><span></span><span></span><b>chiku</b>
+          </div>
+          <div class="terminal-body">
+            <p><i>you:</i> Explain this project architecture.</p>
+            <p class="muted">
+              agent: I’ll inspect the repository structure first.
+            </p>
+            <p><strong>repo_overview</strong> <small>ok</small></p>
+            <p><strong>list_files</strong> <small>ok</small></p>
+            <p class="muted">
+              agent: The runtime separates context, providers, tools,
+              permissions, and sessions.
+            </p>
+            <p class="prompt">› <span class="cursor"></span></p>
+          </div>
+        </div>
+      </section>
+      <section id="features" class="section-shell">
+        <div class="section-heading">
+          <p class="eyebrow">THE WORKFLOW</p>
+          <h2>A coding agent you can inspect.</h2>
+          <p>
+            Every feature below is based on the current repository
+            implementation. Advanced integrations remain clearly marked until
+            independently verified.
+          </p>
+        </div>
+        <div id="feature-grid" class="feature-grid"></div>
+      </section>
+      <section id="architecture" class="section-shell architecture">
+        <div class="section-heading">
+          <p class="eyebrow">ARCHITECTURE</p>
+          <h2>From request to verified result.</h2>
+        </div>
+        <div
+          class="architecture-flow"
+          role="img"
+          aria-label="User input flows through the Ink UI, agent loop, context manager, provider, tool registry, permission engine, workspace, verification, and session store"
+        >
+          <div>User<br /><small>request</small></div>
+          <span>→</span>
+          <div>Chiku CLI<br /><small>React + Ink</small></div>
+          <span>→</span>
+          <div>Agent loop<br /><small>budgets</small></div>
+          <span>→</span>
+          <div>Tools + policy<br /><small>validated</small></div>
+          <span>→</span>
+          <div>Verify<br /><small>evidence</small></div>
+        </div>
+        <p class="architecture-note">
+          The model provider, context manager, permission engine, tool registry,
+          process executor, workspace, verification workflow, and session store
+          are separate modules in the current TypeScript runtime.
+        </p>
+      </section>
+      <section id="docs" class="section-shell split-section">
+        <div>
+          <p class="eyebrow">DOCUMENTATION</p>
+          <h2>Start with the source of truth.</h2>
+          <p>
+            Use the repository documentation for commands and configuration that
+            have been checked against the current codebase.
+          </p>
+        </div>
+        <div class="doc-list">
+          <a href="../README.md"
+            ><span>01</span><b>README</b
+            ><small>Overview and quick start</small></a
+          ><a href="../docs/PROVIDER.md"
+            ><span>02</span><b>Provider guide</b
+            ><small>OpenRouter configuration</small></a
+          ><a href="../docs/TOOL.md"
+            ><span>03</span><b>Tool reference</b
+            ><small>Built-in tool contracts</small></a
+          ><a href="../docs/WORKSPACE.md"
+            ><span>04</span><b>Workspace guide</b
+            ><small>Isolation and recovery notes</small></a
+          >
+        </div>
+      </section>
+      <section id="install" class="section-shell install-section">
+        <div class="section-heading">
+          <p class="eyebrow">GET STARTED</p>
+          <h2>Run Chiku from source.</h2>
+          <p>
+            The package is currently distributed as a source/development
+            project, not as a public registry release.
+          </p>
+        </div>
+        <div class="install-card">
+          <div class="code-block">
+            <button
+              class="copy-button"
+              data-copy="git clone https://github.com/ankit25bcs10610/Agent-Harness.git\ncd Agent-Harness\nbun install\nbun run dev"
+              type="button"
+            >
+              Copy</button
+            ><code
+              >git clone https://github.com/ankit25bcs10610/Agent-Harness.git<br />cd
+              Agent-Harness<br />bun install<br /><span class="accent"
+                >bun run dev</span
+              ></code
+            >
+          </div>
+          <p>
+            Set <code>OPENROUTER_API_KEY</code> in your environment before
+            making provider requests. Never put credentials in browser code or
+            commit them.
+          </p>
+        </div>
+      </section>
+      <section class="section-shell faq">
+        <div class="section-heading">
+          <p class="eyebrow">FAQ</p>
+          <h2>Honest answers.</h2>
+        </div>
+        <details>
+          <summary>Does the website execute Chiku tools?</summary>
+          <p>
+            No. The demonstration is a labeled, prerecorded transcript.
+            Anonymous visitors are never connected to a shell, filesystem, or
+            provider credential.
+          </p>
+        </details>
+        <details>
+          <summary>Which providers are documented?</summary>
+          <p>
+            The current verified quick start uses OpenRouter. Check the provider
+            source and guide before enabling another adapter.
+          </p>
+        </details>
+        <details>
+          <summary>Can I contribute?</summary>
+          <p>
+            Yes. Review the repository documentation, run the local checks, and
+            open an issue or pull request on GitHub.
+          </p>
+        </details>
+      </section>
+    </main>
+    <footer class="site-footer section-shell">
+      <span>© 2026 Chiku contributors</span
+      ><span>Built for careful software work.</span
+      ><a href="https://github.com/ankit25bcs10610/Agent-Harness"
+        >Source on GitHub ↗</a
+      >
+    </footer>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

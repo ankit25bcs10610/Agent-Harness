@@ -36,6 +36,8 @@ import {
   proposeImprovements,
 } from "../evaluation";
 import { McpClientManager } from "../mcp";
+import { diagnostics } from "../cli";
+import { listIncidents } from "../maintenance/incidents";
 
 const permissions: PermSession = {
   projectRoot: process.cwd(),
@@ -95,6 +97,10 @@ const COMMANDS: Record<string, string> = {
   "/mcp": "Manage explicitly configured MCP servers and discovered tools.",
   "/skill":
     "Activate a skill by name, or deactivate it with /skill off <name>.",
+  "/health":
+    "Show local runtime, workspace, storage, and credential configuration health.",
+  "/incidents":
+    "Inspect locally persisted crash incidents. No external report is submitted.",
 };
 
 function resolveCommand(text: string): string {
@@ -215,6 +221,68 @@ export function App({ systemPrompt, session, config }: Props) {
       "/contracts": "list_change_contracts",
     };
     const localCommand = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+    if (localCommand === "/health") {
+      const checks = diagnostics(
+        activeWorkspaceRef.current?.authorizedRoot ?? process.cwd(),
+      );
+      const remainder = text
+        .trim()
+        .slice(localCommand.length)
+        .trim()
+        .toLowerCase();
+      const selected = checks;
+      const failures = selected.filter(
+        (check) => check.status === "FAIL",
+      ).length;
+      const payload =
+        remainder === "status"
+          ? {
+              scope: "local-runtime",
+              status: failures > 0 ? "DEGRADED" : "HEALTHY",
+              failures,
+              total: selected.length,
+            }
+          : remainder === "components" || remainder === "report" || !remainder
+            ? {
+                scope: "local-runtime",
+                status: failures > 0 ? "DEGRADED" : "HEALTHY",
+                checks: selected,
+              }
+            : {
+                error: `unknown /health mode: ${remainder}`,
+                supported: ["status", "components", "report"],
+              };
+      push(
+        failures > 0 ? "error" : "assistant",
+        JSON.stringify(payload, null, 2),
+      );
+      setRunning(false);
+      abortRef.current = null;
+      return;
+    }
+    if (localCommand === "/incidents") {
+      try {
+        const incidents = await listIncidents();
+        push(
+          "assistant",
+          JSON.stringify(
+            {
+              scope: "local-crash-reports",
+              count: incidents.length,
+              incidents,
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        push("error", error instanceof Error ? error.message : String(error));
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+      return;
+    }
     if (localCommand === "/workspaces" || localCommand === "/workspace") {
       try {
         const remainder = text.trim().slice(localCommand.length).trim();

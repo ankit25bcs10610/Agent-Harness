@@ -90,15 +90,13 @@ test("fails closed when requested isolation is unavailable", async () => {
   expect(result.failure).toBe("isolation_unavailable");
 });
 
-test("secure execution uses the OS backend or fails closed when the host rejects it", async () => {
-  const result = await new ProcessExecutor().run({
+test("secure execution fails closed when no backend is registered", async () => {
+  const result = await new ProcessExecutor(new IsolationRegistry()).run({
     command: "/usr/bin/printf secure",
     requireIsolation: true,
   });
-  expect(
-    result.failure === undefined || result.failure === "isolation_unavailable",
-  ).toBe(true);
-  if (result.failure === undefined) expect(result.stdout).toBe("secure");
+  expect(result.failure).toBe("isolation_unavailable");
+  expect(result.stdout).toBe("");
 });
 
 test("rejects a working directory outside the workspace", async () => {

@@ -5,10 +5,25 @@ import { createSession, loadLatestSession } from "./session/store";
 import { getContextWindow } from "./provider/model";
 import { CONFIG } from "./config";
 import type { CliOptions } from "./cli";
+import {
+  getInstallationId,
+  loadAnalyticsConsent,
+  recordAnalyticsEvent,
+} from "./analytics";
 
 export async function launch(
   options: Pick<CliOptions, "continueSession" | "model">,
 ) {
+  const analyticsDirectory = `${process.cwd()}/.chiku/analytics`;
+  if ((await loadAnalyticsConsent(analyticsDirectory)).analyticsOptIn) {
+    const installationId = await getInstallationId(analyticsDirectory);
+    await recordAnalyticsEvent(analyticsDirectory, {
+      name: "first_launch",
+      installationId,
+      productVersion: process.env.CHIKU_VERSION ?? "source",
+      properties: { mode: "local" },
+    });
+  }
   const loopModel =
     options.model ?? process.env.CHIKU_MODEL ?? CONFIG.loopModel;
   const workflow = CONFIG.workflow

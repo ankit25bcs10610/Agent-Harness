@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { websiteAssetPath } from "../scripts/website-server";
 
 describe("website source", () => {
   test("has working primary destinations and documentation search", async () => {
@@ -17,5 +18,11 @@ describe("website source", () => {
     const preview = await readFile("assets/chiku-social-preview.svg", "utf8");
     expect(robots).toContain("User-agent: *");
     expect(preview).toContain("Chiku");
+  });
+
+  test("website server rejects traversal outside the website root", () => {
+    expect(websiteAssetPath("/../README.md")).toBeUndefined();
+    expect(websiteAssetPath("/%2e%2e/%2e%2e/package.json")).toBeUndefined();
+    expect(websiteAssetPath("/index.html")).toContain("website");
   });
 });

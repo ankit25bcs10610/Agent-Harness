@@ -43,6 +43,7 @@
     "package:check": "npm pack --dry-run",
     "package:test": "bun tests/package-smoke.ts",
     "release:checksums": "bun scripts/checksums.ts dist/chiku.js dist/chiku.js.map",
+    "release:manifest": "bun scripts/release-manifest.ts dist/chiku.js dist/chiku.js.map",
     "security:check": "bun scripts/security-check.ts",
     "prepack": "bun run build",
     "format": "prettier --write .",

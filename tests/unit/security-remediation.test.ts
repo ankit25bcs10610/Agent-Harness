@@ -34,9 +34,10 @@ test("rejects security scopes that escape the authorized repository", async () =
 
 test("reports source-grounded static findings without exposing secret values", async () => {
   const root = await fixture();
+  const syntheticToken = ["sk", "or", "v1", "super-secret-value"].join("-");
   await writeFile(
     join(root, "src/config.ts"),
-    'const token = "sk-or-v1-super-secret-value";\n',
+    `const token = ${JSON.stringify(syntheticToken)};\n`,
   );
   const result = await scanAuthorizedRepository({
     root,

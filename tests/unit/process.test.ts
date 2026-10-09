@@ -90,6 +90,15 @@ test("fails closed when requested isolation is unavailable", async () => {
   expect(result.failure).toBe("isolation_unavailable");
 });
 
+test("secure execution fails closed before host spawning when no backend is selected", async () => {
+  const result = await new ProcessExecutor().run({
+    command: "echo must-not-run",
+    requireIsolation: true,
+  });
+  expect(result.failure).toBe("isolation_unavailable");
+  expect(result.stderr).toContain("OS-enforced isolation backend");
+});
+
 test("rejects a working directory outside the workspace", async () => {
   const directory = await mkdtemp(join(tmpdir(), "chiku-process-"));
   try {

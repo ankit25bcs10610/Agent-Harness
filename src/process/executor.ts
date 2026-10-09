@@ -139,6 +139,17 @@ export class ProcessExecutor {
     if (!Number.isInteger(maxOutputChars) || maxOutputChars <= 0) {
       throw new Error("maxOutputChars must be a positive integer");
     }
+    if (request.requireIsolation && !request.isolation) {
+      return {
+        stdout: "",
+        stderr: "secure execution requires an OS-enforced isolation backend",
+        exitCode: null,
+        signal: null,
+        durationMs: Date.now() - started,
+        truncated: false,
+        failure: "isolation_unavailable",
+      };
+    }
 
     let prepared: PreparedProcess;
     try {

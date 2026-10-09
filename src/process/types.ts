@@ -5,6 +5,8 @@ export type IsolationRequest = {
 
 export type ProcessRequest = {
   command: string;
+  /** Refuse host execution unless an OS-enforced backend is supplied. */
+  requireIsolation?: boolean;
   workspaceRoot?: string;
   cwd?: string;
   env?: Record<string, string>;

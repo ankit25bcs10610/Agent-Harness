@@ -21,6 +21,12 @@ export const bashTool: Tool<
     "Run a non-interactive process in the project directory. Simple commands use direct argument-based spawning. Set shell=true only when pipes, chaining, redirects, command substitution, or other shell syntax is required. Output, timeout, cancellation, and failure metadata are returned.",
   parameters: z.object({
     command: z.string().describe("single non-interactive shell command to run"),
+    requireIsolation: z
+      .boolean()
+      .optional()
+      .describe(
+        "fail closed unless an OS-enforced isolation backend is available",
+      ),
     shell: z
       .boolean()
       .optional()
@@ -43,6 +49,7 @@ export const bashTool: Tool<
     const result = await executor.run(
       {
         command: args.command,
+        requireIsolation: args.requireIsolation,
         shell: args.shell,
         ...(context?.workspace?.authorizedRoot
           ? { workspaceRoot: context.workspace.authorizedRoot }

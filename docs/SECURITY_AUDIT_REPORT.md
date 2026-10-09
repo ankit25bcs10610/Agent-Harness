@@ -31,8 +31,8 @@ Inspected the agent loop, process executor/isolation, permission engine, patch e
 - Severity: **High** for untrusted repositories; confidence: high.
 - Evidence: `src/tool/tools/bash.ts` constructs `new ProcessExecutor()` without an isolation policy. `src/process/executor.ts` calls `spawn(...)` directly. `src/process/isolation.ts` documents that no backend is enabled by default and only fails closed when a caller explicitly requests isolation.
 - Impact: a permitted command can use the host process privileges, readable files, and network available to the user. CWD restrictions do not prevent access to unrelated readable paths or network destinations.
-- Existing mitigations: direct argument spawning by default, explicit shell mode, filtered sensitive environment keys, timeout/output limits, cancellation, and workspace CWD validation.
-- Required remediation: add and register an actually enforced OS/container/VM backend; make secure mode explicit and fail closed when required; add runtime tests for host-file, network, privilege, and descendant-process isolation. Do not describe current behavior as sandboxing.
+- Existing mitigations: direct argument spawning by default, explicit shell mode, filtered sensitive environment keys, timeout/output limits, cancellation, workspace CWD validation, and a new `requireIsolation` fail-closed contract.
+- Required remediation: add and register an actually enforced OS/container/VM backend; the current `requireIsolation` contract now fails closed but cannot provide isolation by itself. Add runtime tests for host-file, network, privilege, and descendant-process isolation. Do not describe current behavior as sandboxing.
 
 ### CHIKU-SEC-002 — Remote MCP URL policy is incomplete
 

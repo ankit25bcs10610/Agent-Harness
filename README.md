@@ -22,7 +22,18 @@ Chiku is a terminal-native AI coding agent and harness. It is more than an LLM A
 
 The current runtime connects to OpenRouter, renders through React and Ink, and exposes a small set of project tools. It can inspect files, create files, make exact replacements, run non-interactive shell commands, and load local Markdown skills. Sensitive operations pass through human approval.
 
+An explicitly configured local OpenAI-compatible endpoint is also supported for
+private/offline workflows. Local mode is loopback-only by default, never falls
+back to OpenRouter, and does not download or install model runtimes. See
+[docs/LOCAL_MODELS.md](docs/LOCAL_MODELS.md) for the supported boundary and
+limitations.
+
 MCP is an optional extension. Explicitly configured servers can be connected with approval, discovered tools are namespaced as `mcp.<server>.<tool>`, and calls use the existing tool registry and external permission capability. No server is started or contacted automatically.
+
+The deterministic adversarial fixture harness is documented in
+[docs/SECURITY_RED_TEAM_REPORT.md](docs/SECURITY_RED_TEAM_REPORT.md). It tests
+the real tool/permission boundary with synthetic content and does not claim
+complete prompt-injection protection or OS-level sandboxing.
 
 ## Why Chiku?
 

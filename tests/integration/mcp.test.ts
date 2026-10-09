@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { McpClientConnection } from "../../src/mcp";
+import { McpClientConnection, McpClientManager } from "../../src/mcp";
 import { registerExternalTools, runTool } from "../../src/tool/registry";
 
 const connections: McpClientConnection[] = [];
@@ -123,6 +123,44 @@ test("MCP tool input validation and capability policy fail closed", async () => 
       },
     ),
   ).rejects.toThrow("not permitted");
+});
+
+test("disconnect removes stale MCP tools from the trusted registry", async () => {
+  const manager = new McpClientManager();
+  const connection = await manager.connect({
+    id: "fixture-disconnect",
+    transport: "stdio",
+    command: process.execPath,
+    args: ["tests/fixtures/mcp-server.ts"],
+    environment: {},
+    connectTimeoutMs: 5_000,
+    toolTimeoutMs: 5_000,
+    maxOutputChars: 5_000,
+    enabled: true,
+    allowedHosts: [],
+    allowedTools: [],
+  });
+  const toolName = "mcp.fixture-disconnect.greet";
+  expect(connection.tools.map((tool) => tool.namespacedName)).toContain(
+    toolName,
+  );
+  expect(
+    await runTool(toolName, JSON.stringify({ name: "Ankit" }), {
+      permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+      asker: async () => "allow-once",
+      signal: new AbortController().signal,
+      maxOutputChars: 5_000,
+    }),
+  ).toContain("hello Ankit");
+  await manager.disconnect("fixture-disconnect");
+  expect(
+    await runTool(toolName, JSON.stringify({ name: "Ankit" }), {
+      permissions: { projectRoot: process.cwd(), grants: [], audit: [] },
+      asker: async () => "allow-once",
+      signal: new AbortController().signal,
+      maxOutputChars: 5_000,
+    }),
+  ).toContain("unknown tool");
 });
 
 test("MCP resources and prompts use the negotiated client session", async () => {

@@ -3,6 +3,7 @@ import type {
   AgentMessage,
   ToolSpec,
   ProviderOptions,
+  CompleteStreamFunc,
 } from "./types";
 
 export type ModelCapabilities = {
@@ -19,6 +20,8 @@ export type ModelInfo = {
   name?: string;
   capabilities: ModelCapabilities;
   configured: boolean;
+  /** False means capabilities are not verified and must not be used for routing. */
+  capabilitiesVerified?: boolean;
 };
 export type ProviderAdapter = {
   id: string;
@@ -30,6 +33,7 @@ export type ProviderAdapter = {
     model: string,
     options?: ProviderOptions,
   ) => Promise<ProviderResponse>;
+  completeStream?: CompleteStreamFunc;
 };
 
 const adapters = new Map<string, ProviderAdapter>();

@@ -5,6 +5,7 @@ export type {
   ToolCall,
   ToolMessage,
   SystemMessage,
+  CompleteStreamFunc,
 } from "./types";
 
 export { complete, completeStream } from "./complete";
@@ -21,5 +22,15 @@ export { requestJson } from "./transport";
 export { completeWithFallback } from "./fallback";
 export { createOpenAICompatibleAdapter } from "./openai-compatible";
 export type { CompatibleProviderConfig } from "./openai-compatible";
+export {
+  createLocalProviderAdapter,
+  detectHardware,
+  inspectLocalEndpoint,
+  localEndpointFromEnv,
+  type HardwareProfile,
+  type LocalEndpointConfig,
+  type LocalModelCapability,
+  type LocalEndpointInspection,
+} from "./local";
 export { chooseModel } from "./router";
 export type { RoutingDecision, RoutingPolicy, RoutingRequest } from "./router";

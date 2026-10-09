@@ -5,8 +5,9 @@ export type HttpRequest = {
   method?: string;
   headers?: Record<string, string>;
   body?: unknown;
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   signal?: AbortSignal;
+  fetchImpl?: typeof fetch | undefined;
 };
 
 export async function requestJson<T>(
@@ -20,7 +21,7 @@ export async function requestJson<T>(
   const abort = () => controller.abort();
   request.signal?.addEventListener("abort", abort, { once: true });
   try {
-    const response = await fetch(request.url, {
+    const response = await (request.fetchImpl ?? fetch)(request.url, {
       method: request.method ?? "GET",
       headers: {
         ...(request.body ? { "content-type": "application/json" } : {}),

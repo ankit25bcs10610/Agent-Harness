@@ -36,6 +36,7 @@ export function createOpenAICompatibleAdapter(
           : {},
         body: { model, messages, tools, stream: false },
         signal,
+        fetchImpl: config.fetchImpl,
         ...(options?.timeoutMs !== undefined
           ? { timeoutMs: options.timeoutMs }
           : {}),

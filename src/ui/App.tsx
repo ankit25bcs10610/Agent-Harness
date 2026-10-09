@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput, useStdout } from "ink";
 import type { Item } from "./types";
-import type { SystemMessage } from "../provider";
+import type { CompleteStreamFunc, SystemMessage } from "../provider";
 import { completeStream } from "../provider";
 import { runLoop } from "../loop/loop";
 import { isToolError, summarizeArgs } from "./summarize";
@@ -50,6 +50,7 @@ type Props = {
   systemPrompt: SystemMessage;
   session: Session;
   config: LoopConfig;
+  complete?: CompleteStreamFunc;
 };
 type LiveTool = { name: string; summary: string };
 
@@ -115,7 +116,7 @@ function resolveCommand(text: string): string {
   return COMMANDS[command] ?? text;
 }
 
-export function App({ systemPrompt, session, config }: Props) {
+export function App({ systemPrompt, session, config, complete }: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [resizeKey, setResizeKey] = useState(0); // new key remounts <Static>, reprinting every item
@@ -710,7 +711,7 @@ export function App({ systemPrompt, session, config }: Props) {
       const result = await runLoop({
         messages: [{ type: "user", content: request }],
         state: sessionRef.current.state,
-        complete: completeStream,
+        complete: complete ?? completeStream,
         systemPrompt,
         config,
         ctx: toolContext,

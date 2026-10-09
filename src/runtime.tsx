@@ -3,6 +3,7 @@ import { App } from "./ui/App";
 import { generateSystemPrompt } from "./context/system_prompt";
 import { createSession, loadLatestSession } from "./session/store";
 import { getContextWindow } from "./provider/model";
+import { createLocalProviderAdapter, localEndpointFromEnv } from "./provider";
 import { CONFIG } from "./config";
 import type { CliOptions } from "./cli";
 import {
@@ -26,6 +27,16 @@ export async function launch(
   }
   const loopModel =
     options.model ?? process.env.CHIKU_MODEL ?? CONFIG.loopModel;
+  const localRequested =
+    process.env.CHIKU_PROVIDER === "local" || loopModel.startsWith("local/");
+  const localEndpoint = localRequested ? localEndpointFromEnv() : undefined;
+  if (localRequested && !localEndpoint)
+    throw new Error(
+      "Local provider selected but CHIKU_LOCAL_BASE_URL is not configured; no cloud fallback is performed",
+    );
+  const localProvider = localEndpoint
+    ? createLocalProviderAdapter(localEndpoint)
+    : undefined;
   const workflow = CONFIG.workflow
     ? {
         root: process.cwd(),
@@ -51,7 +62,14 @@ export async function launch(
   else if (loaded) console.log(`resuming session: ${loaded.id}`);
   const session = loaded ?? createSession("");
   render(
-    <App systemPrompt={systemPrompt} session={session} config={config} />,
+    <App
+      systemPrompt={systemPrompt}
+      session={session}
+      config={config}
+      {...(localProvider?.completeStream
+        ? { complete: localProvider.completeStream }
+        : {})}
+    />,
     {
       exitOnCtrlC: false,
     },

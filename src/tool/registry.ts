@@ -66,6 +66,17 @@ export function registerExternalTools(external: readonly Tool<any, unknown>[]) {
   }
 }
 
+/** Removes only the named external tools after their connection is closed. */
+export function unregisterExternalTools(names: readonly string[]) {
+  for (const name of names) {
+    if (name.startsWith("mcp.") && registry[name]) {
+      delete registry[name];
+      const index = tools.findIndex((tool) => tool.name === name);
+      if (index >= 0) tools.splice(index, 1);
+    }
+  }
+}
+
 export function generateToolsArray(): ToolSpec[] {
   return tools.map((tool) => ({
     name: tool.name,

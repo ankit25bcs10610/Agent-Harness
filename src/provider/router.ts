@@ -40,6 +40,7 @@ export function chooseModel(
     return (
       route.roles?.includes(request.role) === true &&
       model?.configured === true &&
+      model.capabilitiesVerified !== false &&
       (!request.requiresTools || model.capabilities.toolCalling) &&
       (request.minimumContextWindow === undefined ||
         (model.capabilities.contextWindow ?? 0) >=

@@ -1,4 +1,7 @@
-import { registerExternalTools } from "../tool/registry";
+import {
+  registerExternalTools,
+  unregisterExternalTools,
+} from "../tool/registry";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { McpClientConnection } from "./client";
@@ -47,7 +50,9 @@ export class McpClientManager {
 
   async disconnect(serverId: string) {
     const connection = this.get(serverId);
+    const names = connection.tools().map((tool) => tool.name);
     await connection.close();
+    unregisterExternalTools(names);
     this.connections.delete(serverId);
   }
 

@@ -4,9 +4,23 @@ import { join, resolve } from "node:path";
 import { loadCliConfig } from "./cli-config";
 import { CONFIG } from "./config";
 import { deploymentCapabilities, loadOperationalConfig } from "./ops";
+import { inventoryTests } from "./testing";
+import {
+  detectHardware,
+  inspectLocalEndpoint,
+  localEndpointFromEnv,
+} from "./provider";
 
 export type CliOptions = {
-  command: "run" | "help" | "version" | "doctor" | "setup" | "install-status";
+  command:
+    | "run"
+    | "help"
+    | "version"
+    | "doctor"
+    | "setup"
+    | "install-status"
+    | "local-status"
+    | "test-discover";
   model?: string;
   provider?: string;
   workspace?: string;
@@ -38,6 +52,8 @@ Usage:
   chiku doctor
   chiku setup
   chiku install-status
+  chiku local-status
+  chiku test-discover [--workspace <path>]
 
 Options:
   --help                 Show this help without contacting a provider
@@ -132,6 +148,8 @@ export function parseArgs(args: readonly string[]): CliOptions {
       options.command = "doctor";
     else if (arg === "setup") options.command = "setup";
     else if (arg === "install-status") options.command = "install-status";
+    else if (arg === "local-status") options.command = "local-status";
+    else if (arg === "test-discover") options.command = "test-discover";
     else if (arg === "--continue") options.continueSession = true;
     else if (arg === "--verbose") options.verbose = true;
     else if (arg === "--no-color") options.noColor = true;
@@ -144,7 +162,7 @@ export function parseArgs(args: readonly string[]): CliOptions {
     else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     else throw new Error(`unexpected argument: ${arg}`);
   }
-  if (options.provider && options.provider !== "openrouter")
+  if (options.provider && !["openrouter", "local"].includes(options.provider))
     throw new Error(`provider is not configured: ${options.provider}`);
   return options;
 }
@@ -283,6 +301,31 @@ export async function main(args = process.argv.slice(2)) {
     );
     return 0;
   }
+  if (options.command === "local-status") {
+    const endpoint = localEndpointFromEnv();
+    const inspection = endpoint
+      ? inspectLocalEndpoint(endpoint)
+      : {
+          allowed: false,
+          classification: "invalid" as const,
+          reason: "CHIKU_LOCAL_BASE_URL is not configured",
+        };
+    console.log(
+      JSON.stringify(
+        {
+          endpoint: endpoint
+            ? { configured: true, ...inspection }
+            : { configured: false, reason: inspection.reason },
+          hardware: detectHardware(),
+          cloudFallback: false,
+          capabilities: "unknown until explicitly configured or probed",
+        },
+        null,
+        2,
+      ),
+    );
+    return inspection.allowed ? 0 : 1;
+  }
   if (options.command === "doctor") {
     const checks = [
       ...diagnostics(options.workspace),
@@ -298,6 +341,11 @@ export async function main(args = process.argv.slice(2)) {
       return 2;
     }
     process.chdir(options.workspace);
+  }
+  if (options.command === "test-discover") {
+    const inventory = await inventoryTests(process.cwd());
+    console.log(JSON.stringify(inventory, null, 2));
+    return inventory.framework.supported ? 0 : 1;
   }
   try {
     const fileConfig = await loadCliConfig(options.config);

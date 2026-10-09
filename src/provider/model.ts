@@ -11,6 +11,8 @@ export async function getContextWindow(
   model: string,
   fallback: number,
 ): Promise<number> {
+  if (model.startsWith("local/") || process.env.CHIKU_PROVIDER === "local")
+    return fallback;
   const cached = cache.get(model);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   try {

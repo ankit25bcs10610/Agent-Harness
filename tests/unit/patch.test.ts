@@ -115,3 +115,20 @@ test("registers apply_patch with central permission checks", async () => {
   );
   expect(result).toContain("Not allowed");
 });
+
+test("authorizes every affected patch path independently", async () => {
+  root = await mkdtemp(join(tmpdir(), "chiku-patch-"));
+  await writeFile(join(root, "allowed.txt"), "one\n");
+  await writeFile(join(root, ".env"), "TOKEN=secret\n");
+  const result = await runTool(
+    "apply_patch",
+    JSON.stringify({
+      dryRun: true,
+      patch:
+        "*** Begin Patch\n*** Update File: allowed.txt\n@@ -1 +1 @@\n-one\n+two\n*** Update File: .env\n@@ -1 +1 @@\n-TOKEN=secret\n+TOKEN=changed\n*** End Patch",
+    }),
+    context(),
+  );
+  expect(result).toContain("sensitive file or credential path");
+  expect(await readFile(join(root, "allowed.txt"), "utf8")).toBe("one\n");
+});

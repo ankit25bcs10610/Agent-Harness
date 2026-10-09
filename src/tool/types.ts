@@ -12,6 +12,7 @@ export type Tool<
   getPermissionKey: (
     args: z.infer<z.ZodObject<TParams>>,
   ) => PermissionKey | undefined;
+  getPermissionKeys?: (args: z.infer<z.ZodObject<TParams>>) => PermissionKey[];
   execute: (
     args: z.infer<z.ZodObject<TParams>>,
     signal: AbortSignal,

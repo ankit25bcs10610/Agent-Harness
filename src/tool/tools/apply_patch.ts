@@ -1,6 +1,6 @@
 import z from "zod";
 import { join } from "node:path";
-import { applyPatch, undoPatch } from "../../patch/engine";
+import { applyPatch, parsePatch, undoPatch } from "../../patch/engine";
 import { loadContract, saveContract } from "../../contract/store";
 import { reviseContract } from "../../contract/types";
 import { validateContractPreconditions } from "../../contract/preconditions";
@@ -43,6 +43,24 @@ export const applyPatchTool: Tool<any, unknown> = {
         : `${args.dryRun ? "Preview" : "Apply"} a multi-file patch in the workspace`,
     risk: "high",
   }),
+  getPermissionKeys: (args: any) => {
+    if (args.mode === "undo")
+      return [
+        {
+          capability: "modify",
+          target: ".",
+          explanation:
+            "Undo verified agent-owned patch changes in the workspace",
+          risk: "high",
+        },
+      ];
+    return parsePatch(args.patch).map((file) => ({
+      capability: "modify" as const,
+      target: file.path,
+      explanation: `${args.dryRun ? "Preview" : "Apply"} patch changes to ${file.path}`,
+      risk: "high" as const,
+    }));
+  },
   execute: async (args: any, signal, context) => {
     const workspaceRoot = context?.workspace?.authorizedRoot ?? process.cwd();
     if (args.mode === "undo") return undoPatch(args.undoToken, signal);

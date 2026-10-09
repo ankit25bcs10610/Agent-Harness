@@ -30,6 +30,70 @@ export async function checkPermission(
   permissions: PermSession,
   asker: Asker,
 ): Promise<Allowed> {
+  const multipleKeys = tool.getPermissionKeys?.(args);
+  if (multipleKeys) {
+    if (multipleKeys.length === 0) {
+      audit(
+        permissions,
+        tool.getPermissionKey(args) ?? {
+          capability: "modify",
+          target: "",
+          explanation: "No patch targets",
+          risk: "high",
+        },
+        "deny",
+        "operation has no explicit targets",
+      );
+      return { ok: false, reason: "operation has no explicit targets" };
+    }
+    for (const rawKey of multipleKeys) {
+      let key = rawKey;
+      let decision: PermissionDecision;
+      try {
+        if (rawKey.capability === "execute") {
+          decision = checkCommand(rawKey.target, permissions.grants);
+        } else if (rawKey.capability !== "external") {
+          const checked = await checkPath(
+            rawKey.target,
+            permissions.projectRoot,
+            rawKey.capability,
+            permissions.grants,
+          );
+          key = { ...rawKey, target: checked.target };
+          decision = checked.decision;
+          if (decision === "deny") {
+            audit(permissions, key, decision, checked.reason);
+            return { ok: false, reason: checked.reason };
+          }
+        } else decision = "ask";
+      } catch (error) {
+        const reason =
+          error instanceof Error
+            ? error.message
+            : "authorization path validation failed";
+        audit(permissions, key, "deny", reason);
+        return { ok: false, reason };
+      }
+      if (decision === "allow") {
+        audit(permissions, key, decision, "capability grant matched");
+        continue;
+      }
+      const userDecision = await asker(key, decision);
+      audit(permissions, key, userDecision, key.explanation);
+      if (userDecision === "deny")
+        return {
+          ok: false,
+          reason: "User denied tool use with the provided arguments",
+        };
+      if (decision === "ask" && userDecision !== "allow-once")
+        permissions.grants.push({
+          capability: key.capability,
+          scope: userDecision === "allow-always-exact" ? "exact" : "prefix",
+          target: key.target,
+        });
+    }
+    return { ok: true };
+  }
   const rawKey = tool.getPermissionKey(args);
   if (!rawKey) return { ok: true };
 

@@ -19,6 +19,8 @@ test("CLI help and version parsing are provider-independent", () => {
   expect(parseArgs(["setup"]).command).toBe("setup");
   expect(parseArgs(["install-status"]).command).toBe("install-status");
   expect(setupText("/tmp/project")).toContain("Credentials are never written");
+  expect(setupText("/tmp/project")).toContain("Review permission prompts");
+  expect(setupText("/tmp/project")).toContain("chiku doctor");
   expect(installationStatus("/tmp/project").workspace).toBe("/tmp/project");
 });
 

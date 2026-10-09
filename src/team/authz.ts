@@ -17,6 +17,11 @@ export const TeamActionSchema = z.enum([
   "billing:read",
   "billing:manage",
   "audit:read",
+  "tasks:read",
+  "tasks:write",
+  "tasks:assign",
+  "tasks:approve",
+  "tasks:review",
 ]);
 export type TeamAction = z.infer<typeof TeamActionSchema>;
 export const TeamMembershipSchema = z.object({
@@ -38,6 +43,11 @@ const permissions: Record<TeamRole, readonly TeamAction[]> = {
     "billing:read",
     "billing:manage",
     "audit:read",
+    "tasks:read",
+    "tasks:write",
+    "tasks:assign",
+    "tasks:approve",
+    "tasks:review",
   ],
   ADMIN: [
     "org:read",
@@ -46,8 +56,20 @@ const permissions: Record<TeamRole, readonly TeamAction[]> = {
     "policy:read",
     "policy:manage",
     "audit:read",
+    "tasks:read",
+    "tasks:write",
+    "tasks:assign",
+    "tasks:approve",
+    "tasks:review",
   ],
-  MEMBER: ["org:read", "members:read", "policy:read"],
+  MEMBER: [
+    "org:read",
+    "members:read",
+    "policy:read",
+    "tasks:read",
+    "tasks:write",
+    "tasks:review",
+  ],
   BILLING_ADMIN: ["org:read", "billing:read", "billing:manage"],
 };
 

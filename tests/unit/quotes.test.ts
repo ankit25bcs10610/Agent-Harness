@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { createQuote, transitionQuote } from "../../src/commercial";
+import {
+  createQuote,
+  LocalQuoteStore,
+  transitionQuote,
+} from "../../src/commercial";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PricingPlan } from "../../src/commercial";
 
 const plan: PricingPlan = {
@@ -74,6 +81,35 @@ test("quote lifecycle requires approved pricing and human evidence", () => {
       evidence: "customer-confirmation-ref",
     }).status,
   ).toBe("ACCEPTED");
+});
+
+test("persisted quotes retain immutable revisions and reject stale transitions", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "chiku-quotes-"));
+  const store = new LocalQuoteStore(directory, "tenant-a");
+  const created = await store.create({
+    tenantId: "tenant-a",
+    customerReference: "customer-a",
+    plan,
+    quantity: 2,
+  });
+  const reviewed = await store.transition({
+    quoteId: created.quoteId,
+    next: "UNDER_REVIEW",
+    actorRole: "commercial_admin",
+    expectedRevision: 1,
+  });
+  expect(reviewed.revision).toBe(2);
+  await expect(
+    store.transition({
+      quoteId: created.quoteId,
+      next: "APPROVED",
+      actorRole: "commercial_admin",
+      expectedRevision: 1,
+    }),
+  ).rejects.toThrow("stale quote revision");
+  expect(
+    (await store.history(created.quoteId)).map((quote) => quote.revision),
+  ).toEqual([1, 2]);
 });
 
 test("quote lifecycle is tenant isolated and rejects unapproved plans", () => {

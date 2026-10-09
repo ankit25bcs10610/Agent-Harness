@@ -3,7 +3,7 @@ import { arch, homedir, platform, release } from "node:os";
 import { join, resolve } from "node:path";
 import { loadCliConfig } from "./cli-config";
 import { CONFIG } from "./config";
-import { loadOperationalConfig } from "./ops";
+import { deploymentCapabilities, loadOperationalConfig } from "./ops";
 
 export type CliOptions = {
   command: "run" | "help" | "version" | "doctor" | "setup" | "install-status";
@@ -54,8 +54,31 @@ Options:
 }
 
 export function setupText(workspace = process.cwd()) {
-  const configured = Boolean(process.env.OPENROUTER_API_KEY);
-  return `Chiku setup — local configuration\n\nWorkspace: ${workspace}\nProvider: OpenRouter\nCredentials: ${configured ? "configured in environment" : "not configured"}\n\n${configured ? "Next: run chiku doctor, then start with chiku --workspace <path>." : "Set OPENROUTER_API_KEY in your shell or an ignored .env file, then run chiku doctor."}\nCredentials are never written by this command.`;
+  const checks = diagnostics(workspace);
+  const status = (name: string) => checks.find((check) => check.name === name);
+  const workspaceCheck = status("workspace");
+  const providerCheck = status("provider credentials");
+  const ready = checks.every((check) => check.status !== "FAIL");
+  const providerNext =
+    providerCheck?.status === "PASS"
+      ? "Run chiku doctor to validate provider reachability and model support."
+      : "Set OPENROUTER_API_KEY in your shell or an ignored .env file, then run chiku doctor.";
+  return `Chiku setup — local configuration
+
+Workspace: ${workspace}
+Workspace check: ${workspaceCheck?.status ?? "NOT_RUN"}
+Provider: OpenRouter
+Credentials: ${providerCheck?.detail ?? "not checked"}
+Setup status: ${ready ? "ready for validation" : "action required"}
+
+Next steps:
+1. ${providerNext}
+2. Review permission prompts before approving file changes or commands.
+3. Start with: chiku --workspace "${workspace}"
+4. Resume safely with: chiku --continue
+
+Chiku setup is cancelable and makes no changes. Credentials are never written by this command.
+Use chiku doctor for detailed runtime, storage, Git, and provider diagnostics.`;
 }
 
 export function installationStatus(workspace = process.cwd()) {
@@ -77,6 +100,12 @@ export function installationStatus(workspace = process.cwd()) {
       : "source-or-runtime",
     operationalEnvironment: operational.environment,
     hostedControlPlane: operational.hostedControlPlane,
+    deploymentCapabilities: deploymentCapabilities().map(
+      ({ mode, status }) => ({
+        mode,
+        status,
+      }),
+    ),
   } as const;
 }
 

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { quoteMinorUnits, type PricingPlan } from "./pricing";
 
@@ -22,6 +24,7 @@ export const QuoteSchema = z.object({
   currency: z.string().length(3),
   quantity: z.number().int().positive(),
   amountMinor: z.number().int().nonnegative(),
+  revision: z.number().int().positive().default(1),
   status: QuoteStatusSchema,
   evidence: z.array(z.string().min(1).max(500)).max(20),
   createdAt: z.string().datetime({ offset: true }),
@@ -38,6 +41,28 @@ const transitions: Record<QuoteStatus, readonly QuoteStatus[]> = {
   DECLINED: [],
   EXPIRED: [],
 };
+
+const quoteFile = (directory: string) => join(directory, "quotes.json");
+
+async function readQuotes(path: string) {
+  try {
+    const value = JSON.parse(await readFile(path, "utf8"));
+    if (!Array.isArray(value)) return [] as Quote[];
+    return value.flatMap((entry) => {
+      const parsed = QuoteSchema.safeParse(entry);
+      return parsed.success ? [parsed.data] : [];
+    });
+  } catch {
+    return [] as Quote[];
+  }
+}
+
+async function writeQuotes(path: string, quotes: readonly Quote[]) {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(quotes, null, 2)}\n`, "utf8");
+  await rename(temporary, path);
+}
 
 export function createQuote(input: {
   tenantId: string;
@@ -59,6 +84,7 @@ export function createQuote(input: {
     currency: total.currency,
     quantity: input.quantity,
     amountMinor: total.amountMinor,
+    revision: 1,
     status: "DRAFT",
     evidence: [],
     createdAt: timestamp,
@@ -97,6 +123,63 @@ export function transitionQuote(input: {
     evidence: input.evidence
       ? [...quote.evidence, input.evidence]
       : quote.evidence,
+    revision: quote.revision + 1,
     updatedAt: new Date().toISOString(),
   });
+}
+
+/** Tenant-scoped local quote persistence with append-only revisions. */
+export class LocalQuoteStore {
+  constructor(
+    private readonly directory: string,
+    private readonly tenantId: string,
+  ) {}
+
+  async create(input: Parameters<typeof createQuote>[0]) {
+    if (input.tenantId !== this.tenantId)
+      throw new Error("quote belongs to another tenant");
+    const quote = createQuote(input);
+    await writeQuotes(
+      quoteFile(this.directory),
+      (await readQuotes(quoteFile(this.directory))).concat(quote),
+    );
+    return quote;
+  }
+
+  async get(quoteId: string) {
+    const revisions = await this.history(quoteId);
+    return revisions.at(-1);
+  }
+
+  async history(quoteId: string) {
+    const quotes = (await readQuotes(quoteFile(this.directory))).filter(
+      (quote) => quote.tenantId === this.tenantId && quote.quoteId === quoteId,
+    );
+    return quotes.sort((left, right) => left.revision - right.revision);
+  }
+
+  async transition(input: {
+    quoteId: string;
+    next: QuoteStatus;
+    actorRole: "commercial_admin" | "customer";
+    evidence?: string;
+    expectedRevision: number;
+  }) {
+    const current = await this.get(input.quoteId);
+    if (!current) throw new Error(`quote not found: ${input.quoteId}`);
+    if (current.revision !== input.expectedRevision)
+      throw new Error(
+        `stale quote revision: expected ${input.expectedRevision}, current ${current.revision}`,
+      );
+    const next = transitionQuote({
+      quote: current,
+      next: input.next,
+      actorTenantId: this.tenantId,
+      actorRole: input.actorRole,
+      ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
+    });
+    const all = await readQuotes(quoteFile(this.directory));
+    await writeQuotes(quoteFile(this.directory), all.concat(next));
+    return next;
+  }
 }

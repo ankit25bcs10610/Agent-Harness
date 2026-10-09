@@ -51,6 +51,36 @@ describe("privacy-first local analytics", () => {
     expect(second).toBe(first);
   });
 
+  test("excludes explicitly synthetic events from adoption and retention reports", () => {
+    const installationId = crypto.randomUUID();
+    const event = (
+      name: "first_launch" | "coding_task_verified",
+      origin: "product" | "synthetic",
+    ) => ({
+      schemaVersion: 1 as const,
+      eventId: crypto.randomUUID(),
+      name,
+      occurredAt: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+      installationId,
+      productVersion: "1.0.0",
+      origin,
+      properties: {},
+    });
+    expect(
+      activationFunnel([event("first_launch", "synthetic")]),
+    ).toMatchObject({
+      eligibleInstallations: 0,
+      firstLaunches: 0,
+    });
+    expect(
+      cohortRetention([event("first_launch", "synthetic")])[0],
+    ).toMatchObject({
+      cohortSize: 0,
+      retainedInstallations: 0,
+      rate: null,
+    });
+  });
+
   test("reports retention from observed events with explicit denominators", () => {
     const first = crypto.randomUUID();
     const second = crypto.randomUUID();

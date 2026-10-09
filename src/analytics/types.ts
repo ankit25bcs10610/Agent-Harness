@@ -22,6 +22,8 @@ export const AnalyticsEventSchema = z.object({
   occurredAt: z.string().datetime({ offset: true }),
   installationId: z.string().uuid(),
   productVersion: z.string().min(1),
+  /** Test fixtures are never eligible for product adoption reports. */
+  origin: z.enum(["product", "synthetic"]).default("product"),
   properties: z.record(
     z.string(),
     z.union([z.string(), z.number(), z.boolean()]),

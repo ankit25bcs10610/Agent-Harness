@@ -18,7 +18,7 @@ export function cohortRetention(
 ): RetentionPeriod[] {
   const launches = new Map<string, number>();
   for (const event of events) {
-    if (event.name !== "first_launch") continue;
+    if (event.origin === "synthetic" || event.name !== "first_launch") continue;
     const at = Date.parse(event.occurredAt);
     if (!Number.isFinite(at)) continue;
     const previous = launches.get(event.installationId);
@@ -33,6 +33,7 @@ export function cohortRetention(
       ([installationId, launchAt]) =>
         events.some((event) => {
           if (
+            event.origin === "synthetic" ||
             event.installationId !== installationId ||
             event.name === "first_launch"
           )

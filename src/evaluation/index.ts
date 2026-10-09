@@ -14,3 +14,5 @@ export * from "./adapters";
 export * from "./experiments";
 export * from "./faults";
 export * from "./statistics";
+export * from "./causal";
+export * from "./capabilities";

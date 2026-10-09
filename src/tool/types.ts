@@ -32,4 +32,10 @@ export type ToolContext = {
   requiredContractId?: string;
   /** Internal marker set only after the central permission engine approves a tool. */
   permissionGranted?: boolean;
+  /** Optional host-provided progress sink for extension tools. */
+  reportProgress?: (progress: {
+    stage: string;
+    completed?: number;
+    total?: number;
+  }) => void;
 };

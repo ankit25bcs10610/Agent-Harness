@@ -94,8 +94,11 @@ export async function listAnalyticsEvents(
 
 export async function recordAnalyticsEvent(
   directory: string,
-  input: Omit<AnalyticsEvent, "schemaVersion" | "eventId" | "occurredAt"> &
-    Partial<Pick<AnalyticsEvent, "eventId" | "occurredAt">>,
+  input: Omit<
+    AnalyticsEvent,
+    "schemaVersion" | "eventId" | "occurredAt" | "origin"
+  > &
+    Partial<Pick<AnalyticsEvent, "eventId" | "occurredAt" | "origin">>,
   retention = { maxEvents: 1000, maxAgeMs: 180 * 24 * 60 * 60 * 1000 },
 ): Promise<AnalyticsEvent | undefined> {
   const consent = await loadAnalyticsConsent(directory);

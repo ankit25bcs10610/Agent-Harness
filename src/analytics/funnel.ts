@@ -17,6 +17,7 @@ export function activationFunnel(
   const attempts = new Set<string>();
   const verified = new Set<string>();
   for (const event of events) {
+    if (event.origin === "synthetic") continue;
     if (event.name === "installation_verified")
       installations.add(event.installationId);
     if (event.name === "first_launch") launches.add(event.installationId);

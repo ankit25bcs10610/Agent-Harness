@@ -115,6 +115,35 @@ bun run dev -- --continue
 
 OpenRouter is an external, potentially billable service. Requests are subject to provider availability, limits, and data-handling policies.
 
+### Automated evaluation runs
+
+For controlled, disposable-project evaluations, Chiku exposes a noninteractive
+runner that uses the same production loop, provider adapters, tool registry,
+permission engine, and session checkpoints as the terminal UI:
+
+```bash
+bun run build
+bun dist/chiku.js eval-run \
+  --workspace /path/to/disposable-project \
+  --task-file /path/to/task.txt \
+  --result-file /path/to/evidence.json \
+  --timeout-ms 120000
+```
+
+The evaluator is fail-closed. It permits only explicitly scoped workspace
+reads/edits and bounded local verification commands; it denies sensitive paths,
+deletes, destructive Git operations, pushes, external access, and path escapes.
+Cloud-provider evaluation requires the explicit environment opt-in
+`CHIKU_EVAL_ALLOW_EXTERNAL_PROVIDER=1`. Local inference requires
+`CHIKU_PROVIDER=local` and an allowed loopback OpenAI-compatible endpoint; Chiku
+does not silently fall back between providers. The JSON evidence records the
+stop reason, execution statistics, changed files, permission audit, and any
+blocker. A blocked or failed run returns a nonzero exit code.
+
+Do not use this command against a production workspace. Keep hidden graders and
+reference solutions outside the evaluated workspace, and treat provider calls
+as potentially billable unless a local model is explicitly selected.
+
 ## Terminal experience
 
 Type a natural-language task at the `>` prompt and press Enter. Chiku renders streamed assistant text, a compact reasoning tail, active tool calls, Markdown, context usage, session title, and status.

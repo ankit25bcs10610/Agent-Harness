@@ -15,6 +15,31 @@ export const AnalyticsEventNameSchema = z.enum([
   "upgrade_completed",
 ]);
 
+export const AnalyticsPropertiesSchema = z
+  .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+  .superRefine((properties, context) => {
+    if (Object.keys(properties).length > 20) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "analytics events support at most 20 properties",
+      });
+    }
+    for (const [key, value] of Object.entries(properties)) {
+      if (key.length > 64) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "analytics property names are too long",
+        });
+      }
+      if (typeof value === "string" && value.length > 256) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "analytics property values are too long",
+        });
+      }
+    }
+  });
+
 export const AnalyticsEventSchema = z.object({
   schemaVersion: z.literal(1),
   eventId: z.string().uuid(),
@@ -24,10 +49,7 @@ export const AnalyticsEventSchema = z.object({
   productVersion: z.string().min(1),
   /** Test fixtures are never eligible for product adoption reports. */
   origin: z.enum(["product", "synthetic"]).default("product"),
-  properties: z.record(
-    z.string(),
-    z.union([z.string(), z.number(), z.boolean()]),
-  ),
+  properties: AnalyticsPropertiesSchema,
 });
 export type AnalyticsEvent = Omit<
   z.infer<typeof AnalyticsEventSchema>,

@@ -5,6 +5,7 @@ import {
   AnalyticsConsentSchema,
   AnalyticsEventSchema,
   AnalyticsExportSchema,
+  AnalyticsPropertiesSchema,
   type AnalyticsConsent,
   type AnalyticsEvent,
   type AnalyticsExport,
@@ -17,12 +18,45 @@ const eventsFile = (directory: string) =>
   join(directory, "analytics-events.json");
 const installationFile = (directory: string) =>
   join(directory, "installation-id");
+const SAFE_PROPERTY_KEYS = new Set([
+  "mode",
+  "provider",
+  "model",
+  "platform",
+  "feature",
+  "status",
+  "errorCategory",
+  "reason",
+]);
+const SENSITIVE_PROPERTY_KEY =
+  /api[-_]?key|authorization|credential|password|prompt|secret|session|source|path|file|code|content|token/i;
+const SECRET_VALUE =
+  /(bearer\s+|sk-[a-z0-9_-]{12,}|openrouter\.[a-z0-9_-]{12,})/i;
+const ABSOLUTE_PATH = /(?:^|\s)(?:\/|[a-z]:[\\/])[^\s]{2,}/i;
 
 async function atomicWrite(path: string, value: unknown) {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   await rename(temporary, path);
+}
+
+export function sanitizeAnalyticsProperties(
+  properties: Record<string, string | number | boolean>,
+) {
+  const sanitized: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (!SAFE_PROPERTY_KEYS.has(key) || SENSITIVE_PROPERTY_KEY.test(key))
+      continue;
+    if (typeof value === "string") {
+      if (SECRET_VALUE.test(value) || ABSOLUTE_PATH.test(value)) continue;
+      sanitized[key] = value.slice(0, 256);
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      sanitized[key] = value;
+    }
+    if (Object.keys(sanitized).length >= 20) break;
+  }
+  return AnalyticsPropertiesSchema.parse(sanitized);
 }
 
 export async function getInstallationId(directory: string): Promise<string> {
@@ -108,6 +142,7 @@ export async function recordAnalyticsEvent(
     eventId: randomUUID(),
     occurredAt: now(),
     ...input,
+    properties: sanitizeAnalyticsProperties(input.properties),
   });
   const cutoff = Date.now() - retention.maxAgeMs;
   const events = (await listAnalyticsEvents(directory))

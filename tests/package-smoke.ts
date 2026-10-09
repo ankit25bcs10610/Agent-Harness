@@ -58,7 +58,7 @@ try {
     const command =
       process.platform === "win32"
         ? ["cmd.exe", "/d", "/s", "/c", executable, ...args]
-        : ["bun", executable, ...args];
+        : [process.execPath, executable, ...args];
     const smoke = Bun.spawn(command, {
       stdout: "pipe",
       stderr: "pipe",
@@ -69,7 +69,9 @@ try {
       new Response(smoke.stderr).text(),
     ]);
     if (code !== 0 || !output.trim())
-      throw new Error(`packaged CLI failed for ${args.join(" ")}: ${error}`);
+      throw new Error(
+        `packaged CLI failed for ${args.join(" ")}: ${error || output}`,
+      );
   }
 } finally {
   await rm(temporary, { recursive: true, force: true });

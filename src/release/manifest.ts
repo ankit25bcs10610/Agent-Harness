@@ -51,6 +51,14 @@ export async function buildReleaseManifest(input: {
   builtAt?: string;
   runtime?: { bun: string; platform: string; arch: string };
 }): Promise<ReleaseManifest> {
+  if (input.channel === "stable" && input.sourceState !== "clean") {
+    throw new Error("stable release artifacts require a clean source tree");
+  }
+  if (input.channel === "stable" && input.sourceRevision === "unknown") {
+    throw new Error(
+      "stable release artifacts require a verified source revision",
+    );
+  }
   const baseDirectory = await realpath(input.baseDirectory ?? process.cwd());
   const artifacts = [];
   for (const artifactPath of input.artifactPaths) {

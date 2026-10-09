@@ -437,11 +437,13 @@ External command availability depends on the target repository.
 bun run dev          # Interactive agent
 bun run watch        # Bun watch mode
 bun run typecheck    # TypeScript validation
-bun run format       # Format files
-bun run format:check # Verify formatting
+bun run format:ci    # Verify formatting
+bun test             # Deterministic unit and integration tests
+bun run build        # Build the packaged CLI
+bun run security:check # Static secret and unsafe-content scan
 ```
 
-The `test` script is currently a failing placeholder. No automated test framework, linter, CI workflow, build pipeline, release process, or coverage report is configured.
+The repository includes a Bun test suite, formatting checks, a cross-platform CI workflow, package inspection, and release integrity checks. Run `bun run package:test` to validate a packed tarball in a temporary installation; it requires dependency registry access.
 
 ## Extending the harness
 
@@ -499,15 +501,12 @@ Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of t
 - Isolated Git workspaces with bounded agent scheduling
 - Validated multi-agent registry, task graph, communication bus, and session recovery
 
-### Planned
+### Remaining limitations
 
-- Atomic tool operations
-- Model context-window caching
-- Automated tests for tools, permissions, context, and normalization
-- More explicit provider configuration and adapter boundaries
-- Complete multi-agent review/repair, conflict orchestration, and end-to-end acceptance scenarios
-
-The first two planned items are recorded in [TODO.md](TODO.md).
+- No OS-level shell sandbox is provided by this repository.
+- Clean package installation depends on registry access and must be verified separately from the source test suite.
+- Hosted team services, live billing, and public release publication are not enabled by default.
+- Multi-agent review/repair and broader end-to-end acceptance scenarios remain subject to the limitations documented in [docs/MULTI_AGENT_TRACKER.md](docs/MULTI_AGENT_TRACKER.md).
 
 ## Multi-agent orchestration
 
@@ -528,12 +527,7 @@ and remaining work.
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a focused branch.
-3. Make a source-aligned change.
-4. Run `bun run typecheck` and `bun run format:check`.
-5. Update docs when behavior changes.
-6. Open a pull request describing design, validation, and limitations.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the executable setup, validation commands, security boundaries, and pull request expectations. Maintainers retain final review and merge authority.
 
 ## License and author
 

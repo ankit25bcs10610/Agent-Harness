@@ -8,6 +8,7 @@ import {
   getInstallationId,
   listAnalyticsEvents,
   recordAnalyticsEvent,
+  sanitizeAnalyticsProperties,
   setAnalyticsConsent,
   cohortRetention,
 } from "../../src/analytics";
@@ -49,6 +50,33 @@ describe("privacy-first local analytics", () => {
     const second = await getInstallationId(directory);
     expect(first).toMatch(/^[0-9a-f-]{36}$/);
     expect(second).toBe(first);
+  });
+
+  test("filters sensitive and unbounded event properties before persistence", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "chiku-analytics-"));
+    await setAnalyticsConsent(directory, true);
+    const event = await recordAnalyticsEvent(directory, {
+      ...base,
+      name: "first_launch",
+      properties: {
+        mode: "local",
+        prompt: "inspect /private/project/source.ts",
+        sourcePath: "/private/project/source.ts",
+        apiKey: ["sk", "live", "secret", "value"].join("-"),
+        reason: "a".repeat(1000),
+      },
+    });
+    expect(event?.properties).toEqual({
+      mode: "local",
+      reason: "a".repeat(256),
+    });
+    expect(JSON.stringify(event)).not.toContain("source.ts");
+    expect(JSON.stringify(event)).not.toContain(
+      ["sk", "live", "secret", "value"].join("-"),
+    );
+    expect(sanitizeAnalyticsProperties({ prompt: "private prompt" })).toEqual(
+      {},
+    );
   });
 
   test("excludes explicitly synthetic events from adoption and retention reports", () => {

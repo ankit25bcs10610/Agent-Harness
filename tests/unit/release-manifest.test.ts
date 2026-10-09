@@ -47,6 +47,24 @@ describe("release manifest", () => {
     ).rejects.toThrow();
   });
 
+  test("fails closed for stable artifacts from an unclean source tree", async () => {
+    const directory = join(tmpdir(), `chiku-release-${crypto.randomUUID()}`);
+    await mkdir(directory, { recursive: true });
+    const artifact = join(directory, "chiku.js");
+    await writeFile(artifact, "release candidate");
+
+    await expect(
+      buildReleaseManifest({
+        version: "1.0.0",
+        channel: "stable",
+        sourceRevision: "abc123",
+        sourceState: "modified",
+        artifactPaths: [artifact],
+        baseDirectory: directory,
+      }),
+    ).rejects.toThrow("clean source tree");
+  });
+
   test("rejects a tampered artifact using recorded size and digest", async () => {
     const directory = join(tmpdir(), `chiku-release-${crypto.randomUUID()}`);
     await mkdir(directory, { recursive: true });

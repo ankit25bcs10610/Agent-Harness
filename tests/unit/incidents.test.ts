@@ -7,6 +7,7 @@ import {
   crashSignature,
   groupIncidents,
   listIncidents,
+  transitionIncident,
 } from "../../src/maintenance/incidents";
 
 test("incident registry classifies persisted crash evidence without claiming confirmed root cause", async () => {
@@ -32,6 +33,57 @@ test("incident registry classifies persisted crash evidence without claiming con
   expect(incidents[0]?.category).toBe("provider");
   expect(incidents[0]?.confidence).toBe("SUSPECTED");
   expect(incidents[0]?.remediation).toBe("human_review_required");
+  expect(incidents[0]?.state).toBe("DETECTED");
+  expect(incidents[0]?.history).toHaveLength(1);
+});
+
+test("incident lifecycle requires authorized evidence and preserves an audit trail", async () => {
+  const directory = join(tmpdir(), `chiku-incidents-${randomUUID()}`);
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, "report.json"),
+    JSON.stringify({
+      version: 1,
+      id: randomUUID(),
+      occurredAt: new Date().toISOString(),
+      event: "uncaught_exception",
+      error: { name: "Error", message: "tool timeout" },
+      runtime: { platform: "test", release: "test" },
+    }),
+  );
+  const [detected] = await listIncidents(directory);
+  expect(detected).toBeDefined();
+  expect(() =>
+    transitionIncident(
+      detected!,
+      "TRIAGED",
+      { actorId: "", actorRole: "operator" },
+      ["local evidence"],
+    ),
+  ).toThrow();
+
+  const triaged = transitionIncident(
+    detected!,
+    "TRIAGED",
+    { actorId: "on-call", actorRole: "operator" },
+    ["local crash report reviewed"],
+  );
+  const investigating = transitionIncident(
+    triaged,
+    "INVESTIGATING",
+    { actorId: "engineer-1", actorRole: "engineer" },
+    ["reproduction fixture required"],
+  );
+  expect(investigating.state).toBe("INVESTIGATING");
+  expect(investigating.history).toHaveLength(3);
+  expect(() =>
+    transitionIncident(
+      investigating,
+      "CLOSED",
+      { actorId: "on-call", actorRole: "operator" },
+      ["closed without verification"],
+    ),
+  ).toThrow("invalid incident transition");
 });
 
 test("identical crash causes receive the same stable signature", async () => {

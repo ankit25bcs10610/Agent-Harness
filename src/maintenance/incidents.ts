@@ -15,6 +15,25 @@ export const IncidentConfidenceSchema = z.enum([
   "SUSPECTED",
   "UNKNOWN",
 ]);
+export const IncidentStateSchema = z.enum([
+  "DETECTED",
+  "TRIAGED",
+  "INVESTIGATING",
+  "MITIGATING",
+  "MONITORING",
+  "RESOLVED",
+  "POSTMORTEM_PENDING",
+  "CLOSED",
+]);
+export const IncidentActorRoleSchema = z.enum(["operator", "engineer"]);
+const IncidentHistoryEntrySchema = z.object({
+  from: IncidentStateSchema.nullable(),
+  to: IncidentStateSchema,
+  actorId: z.string().trim().min(1).max(128),
+  actorRole: IncidentActorRoleSchema,
+  occurredAt: z.string().datetime(),
+  evidence: z.array(z.string().trim().min(1).max(500)).min(1).max(20),
+});
 export const IncidentSchema = z.object({
   incidentId: z.string().uuid(),
   sourceReport: z.string().min(1),
@@ -32,9 +51,29 @@ export const IncidentSchema = z.object({
   ]),
   summary: z.string().min(1),
   evidence: z.array(z.string()),
+  state: IncidentStateSchema,
+  history: z.array(IncidentHistoryEntrySchema).min(1).max(100),
   remediation: z.literal("human_review_required"),
 });
 export type Incident = z.infer<typeof IncidentSchema>;
+export type IncidentActor = {
+  actorId: string;
+  actorRole: z.infer<typeof IncidentActorRoleSchema>;
+};
+
+const ALLOWED_TRANSITIONS: Record<
+  Incident["state"],
+  readonly Incident["state"][]
+> = {
+  DETECTED: ["TRIAGED"],
+  TRIAGED: ["INVESTIGATING"],
+  INVESTIGATING: ["MITIGATING", "MONITORING"],
+  MITIGATING: ["INVESTIGATING", "MONITORING"],
+  MONITORING: ["MITIGATING", "RESOLVED"],
+  RESOLVED: ["POSTMORTEM_PENDING"],
+  POSTMORTEM_PENDING: ["CLOSED"],
+  CLOSED: [],
+};
 
 function normalizeForSignature(value: string) {
   return value
@@ -75,7 +114,7 @@ function classify(report: CrashReport, sourceReport: string): Incident {
           : "runtime";
   const severity =
     safety || dataLoss ? "SEV1" : provider || tool ? "SEV2" : "SEV3";
-  return IncidentSchema.parse({
+  const incident = {
     incidentId: report.id,
     sourceReport,
     signature: crashSignature(report),
@@ -88,7 +127,61 @@ function classify(report: CrashReport, sourceReport: string): Incident {
       "classification is based on persisted local crash evidence",
       ...(report.error.stack ? ["stack trace available"] : []),
     ],
+    state: "DETECTED" as const,
+    history: [
+      {
+        from: null,
+        to: "DETECTED" as const,
+        actorId: "local-crash-reporter",
+        actorRole: "operator" as const,
+        occurredAt: report.occurredAt,
+        evidence: ["classification is based on persisted local crash evidence"],
+      },
+    ],
     remediation: "human_review_required",
+  };
+  return IncidentSchema.parse(incident);
+}
+
+export function transitionIncident(
+  incident: Incident,
+  nextState: Incident["state"],
+  actor: IncidentActor,
+  evidence: readonly string[],
+  occurredAt = new Date(),
+): Incident {
+  const current = IncidentSchema.parse(incident);
+  const validNextStates = ALLOWED_TRANSITIONS[current.state];
+  if (!validNextStates.includes(nextState)) {
+    throw new Error(
+      `invalid incident transition: ${current.state} -> ${nextState}`,
+    );
+  }
+  const validatedActor = z
+    .object({
+      actorId: z.string().trim().min(1).max(128),
+      actorRole: IncidentActorRoleSchema,
+    })
+    .parse(actor);
+  const validatedEvidence = z
+    .array(z.string().trim().min(1).max(500))
+    .min(1)
+    .max(20)
+    .parse(evidence);
+  return IncidentSchema.parse({
+    ...current,
+    state: nextState,
+    history: [
+      ...current.history,
+      {
+        from: current.state,
+        to: nextState,
+        actorId: validatedActor.actorId,
+        actorRole: validatedActor.actorRole,
+        occurredAt: occurredAt.toISOString(),
+        evidence: validatedEvidence,
+      },
+    ],
   });
 }
 

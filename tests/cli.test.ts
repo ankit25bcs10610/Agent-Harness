@@ -4,6 +4,7 @@ import {
   helpText,
   installationStatus,
   parseArgs,
+  providerDiagnosticExitCode,
   setupText,
 } from "../src/cli";
 import { loadCliConfig } from "../src/cli-config";
@@ -20,6 +21,17 @@ test("CLI help and version parsing are provider-independent", () => {
   expect(parseArgs(["install-status"]).command).toBe("install-status");
   expect(parseArgs(["local-status"]).command).toBe("local-status");
   expect(parseArgs(["test-discover"]).command).toBe("test-discover");
+  expect(
+    parseArgs([
+      "eval-run",
+      "--workspace",
+      "/tmp/project",
+      "--task-file",
+      "/tmp/task.txt",
+      "--result-file",
+      "/tmp/result.json",
+    ]).command,
+  ).toBe("eval-run");
   expect(helpText()).toContain("test-discover");
   expect(setupText("/tmp/project")).toContain("Credentials are never written");
   expect(setupText("/tmp/project")).toContain("Review permission prompts");
@@ -43,6 +55,9 @@ test("CLI validates options and preserves explicit runtime configuration", () =>
   expect(options.continueSession).toBe(true);
   expect(() => parseArgs(["--unknown"])).toThrow("unknown option");
   expect(() => parseArgs(["--provider", "unknown"])).toThrow("not configured");
+  expect(() => parseArgs(["eval-run", "--workspace", "/tmp/project"])).toThrow(
+    "task-file",
+  );
 });
 
 test("configuration loads from an explicit file without persisting credentials", async () => {
@@ -109,4 +124,11 @@ test("provider diagnostics honor local mode without requiring cloud credentials"
     CHIKU_PROVIDER: "local",
   });
   expect(missingEndpoint.status).toBe("CONFIGURATION_REQUIRED");
+});
+
+test("doctor treats every unavailable provider state as a nonzero result", () => {
+  expect(providerDiagnosticExitCode("AVAILABLE")).toBe(0);
+  expect(providerDiagnosticExitCode("CONFIGURATION_REQUIRED")).toBe(1);
+  expect(providerDiagnosticExitCode("UNREACHABLE")).toBe(1);
+  expect(providerDiagnosticExitCode("UNSUPPORTED")).toBe(1);
 });

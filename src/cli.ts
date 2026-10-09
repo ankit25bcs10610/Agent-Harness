@@ -20,7 +20,8 @@ export type CliOptions = {
     | "setup"
     | "install-status"
     | "local-status"
-    | "test-discover";
+    | "test-discover"
+    | "eval-run";
   model?: string;
   provider?: string;
   workspace?: string;
@@ -28,6 +29,9 @@ export type CliOptions = {
   continueSession: boolean;
   verbose: boolean;
   noColor: boolean;
+  taskFile?: string;
+  resultFile?: string;
+  timeoutMs?: number;
 };
 
 function installedVersion() {
@@ -54,6 +58,7 @@ Usage:
   chiku install-status
   chiku local-status
   chiku test-discover [--workspace <path>]
+  chiku eval-run --workspace <path> --task-file <path> --result-file <path>
 
 Options:
   --help                 Show this help without contacting a provider
@@ -66,6 +71,9 @@ Options:
   --verbose              Enable diagnostic logging
   --no-color             Disable terminal color output
   --diagnostics          Alias for chiku doctor
+  --task-file <path>     Task text for eval-run
+  --result-file <path>   JSON evidence output for eval-run
+  --timeout-ms <n>       Wall-clock budget for eval-run (default 120000)
 `;
 }
 
@@ -159,6 +167,7 @@ export function parseArgs(args: readonly string[]): CliOptions {
     else if (arg === "install-status") options.command = "install-status";
     else if (arg === "local-status") options.command = "local-status";
     else if (arg === "test-discover") options.command = "test-discover";
+    else if (arg === "eval-run") options.command = "eval-run";
     else if (arg === "--continue") options.continueSession = true;
     else if (arg === "--verbose") options.verbose = true;
     else if (arg === "--no-color") options.noColor = true;
@@ -168,11 +177,26 @@ export function parseArgs(args: readonly string[]): CliOptions {
       options.workspace = resolve(value(args, index++, arg));
     else if (arg === "--config")
       options.config = resolve(value(args, index++, arg));
-    else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
+    else if (arg === "--task-file")
+      options.taskFile = resolve(value(args, index++, arg));
+    else if (arg === "--result-file")
+      options.resultFile = resolve(value(args, index++, arg));
+    else if (arg === "--timeout-ms") {
+      const raw = value(args, index++, arg);
+      const timeoutMs = Number(raw);
+      if (!Number.isInteger(timeoutMs) || timeoutMs <= 0)
+        throw new Error("--timeout-ms must be a positive integer");
+      options.timeoutMs = timeoutMs;
+    } else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     else throw new Error(`unexpected argument: ${arg}`);
   }
   if (options.provider && !["openrouter", "local"].includes(options.provider))
     throw new Error(`provider is not configured: ${options.provider}`);
+  if (options.command === "eval-run") {
+    if (!options.workspace) throw new Error("eval-run requires --workspace");
+    if (!options.taskFile) throw new Error("eval-run requires --task-file");
+    if (!options.resultFile) throw new Error("eval-run requires --result-file");
+  }
   return options;
 }
 
@@ -237,6 +261,12 @@ export function diagnostics(workspace = process.cwd()) {
 
 export type ProviderDiagnosticStatus =
   "AVAILABLE" | "CONFIGURATION_REQUIRED" | "UNREACHABLE" | "UNSUPPORTED";
+
+export function providerDiagnosticExitCode(
+  status: ProviderDiagnosticStatus,
+): 0 | 1 {
+  return status === "AVAILABLE" ? 0 : 1;
+}
 
 export async function diagnoseProvider(
   model = process.env.CHIKU_MODEL ?? CONFIG.loopModel,
@@ -415,7 +445,15 @@ export async function main(args = process.argv.slice(2)) {
     ];
     for (const check of checks)
       console.log(`${check.status.padEnd(7)} ${check.name}: ${check.detail}`);
-    return checks.some((check) => check.status === "FAIL") ? 1 : 0;
+    const provider = checks.at(-1);
+    return checks.some((check) => check.status === "FAIL") ||
+      (provider &&
+        "status" in provider &&
+        providerDiagnosticExitCode(
+          provider.status as ProviderDiagnosticStatus,
+        ) === 1)
+      ? 1
+      : 0;
   }
   if (options.workspace) {
     if (!existsSync(options.workspace)) {
@@ -444,6 +482,26 @@ export async function main(args = process.argv.slice(2)) {
   }
   if (options.model) process.env.CHIKU_MODEL = options.model;
   if (options.provider) process.env.CHIKU_PROVIDER = options.provider;
+  if (options.command === "eval-run") {
+    try {
+      const { runEvaluation } = await import("./eval-run");
+      const evidence = await runEvaluation({
+        workspace: process.cwd(),
+        taskFile: options.taskFile!,
+        resultFile: options.resultFile!,
+        timeoutMs: options.timeoutMs ?? 120_000,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.provider ? { provider: options.provider } : {}),
+      });
+      console.log(JSON.stringify(evidence, null, 2));
+      return evidence.status === "COMPLETED" ? 0 : 1;
+    } catch (error) {
+      console.error(
+        `chiku: evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
   try {
     const { launch } = await import("./runtime");
     await launch(options);

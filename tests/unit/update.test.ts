@@ -134,7 +134,15 @@ describe("secure update metadata and staging", () => {
       async () => artifactBytes,
     );
     expect(await readFile(staged)).toEqual(Buffer.from(artifactBytes));
-    expect((await stat(staged)).mode & 0o777).toBe(0o600);
+    const stagedMode = (await stat(staged)).mode & 0o777;
+    if (process.platform === "win32") {
+      // Windows uses ACLs instead of POSIX permission bits. The temporary
+      // staging directory provides the access boundary; ensure the artifact
+      // is not marked executable while avoiding a false 0600 assertion.
+      expect(stagedMode & 0o111).toBe(0);
+    } else {
+      expect(stagedMode).toBe(0o600);
+    }
     await expect(
       stageUpdateArtifact(
         { ...candidate, sha256: "0".repeat(64) },

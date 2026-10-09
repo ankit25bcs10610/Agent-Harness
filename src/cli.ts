@@ -244,8 +244,66 @@ export async function diagnoseProvider(
     input: string | URL | Request,
     init?: RequestInit,
   ) => Promise<Response> = fetch,
+  env: NodeJS.ProcessEnv = process.env,
 ) {
-  if (!process.env.OPENROUTER_API_KEY)
+  const localMode =
+    env.CHIKU_PROVIDER === "local" || model.startsWith("local/");
+  if (localMode) {
+    const endpoint = localEndpointFromEnv(env);
+    if (!endpoint)
+      return {
+        name: "provider",
+        status: "CONFIGURATION_REQUIRED" as const,
+        detail:
+          "local provider selected but CHIKU_LOCAL_BASE_URL is not configured",
+      };
+    const inspection = inspectLocalEndpoint(endpoint);
+    if (!inspection.allowed)
+      return {
+        name: "provider",
+        status: "CONFIGURATION_REQUIRED" as const,
+        detail: `local endpoint is not allowed: ${inspection.reason}`,
+      };
+    try {
+      const response = await fetchImpl(
+        `${endpoint.baseUrl.replace(/\/$/, "")}/models`,
+        {
+          headers: endpoint.apiKey
+            ? { authorization: `Bearer ${endpoint.apiKey}` }
+            : {},
+          signal: AbortSignal.timeout(endpoint.timeoutMs ?? 10_000),
+        },
+      );
+      if (!response.ok)
+        return {
+          name: "provider",
+          status: "UNREACHABLE" as const,
+          detail: `local model discovery returned HTTP ${response.status}`,
+        };
+      const body = (await response.json()) as {
+        data?: Array<{ id?: unknown }>;
+      };
+      const requestedModel = model.startsWith("local/")
+        ? model.slice("local/".length)
+        : model;
+      const supported =
+        body.data?.some((entry) => entry.id === requestedModel) ?? false;
+      return {
+        name: "provider",
+        status: supported ? ("AVAILABLE" as const) : ("UNSUPPORTED" as const),
+        detail: supported
+          ? `${model} is listed by the local endpoint`
+          : `${model} is not listed by the local endpoint`,
+      };
+    } catch (error) {
+      return {
+        name: "provider",
+        status: "UNREACHABLE" as const,
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+  if (!env.OPENROUTER_API_KEY)
     return {
       name: "provider",
       status: "CONFIGURATION_REQUIRED" as const,
@@ -254,6 +312,7 @@ export async function diagnoseProvider(
   try {
     const response = await fetchImpl("https://openrouter.ai/api/v1/models", {
       signal: AbortSignal.timeout(10_000),
+      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
     });
     if (!response.ok)
       return {

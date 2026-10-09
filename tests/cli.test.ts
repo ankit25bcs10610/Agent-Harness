@@ -84,3 +84,29 @@ test("provider diagnostics distinguish configured model availability", async () 
     else process.env.OPENROUTER_API_KEY = previous;
   }
 });
+
+test("provider diagnostics honor local mode without requiring cloud credentials", async () => {
+  const env = {
+    CHIKU_PROVIDER: "local",
+    CHIKU_LOCAL_BASE_URL: "http://127.0.0.1:11434/v1",
+  };
+  const available = await diagnoseProvider(
+    "local/qwen",
+    async (input) => {
+      expect(String(input)).toBe("http://127.0.0.1:11434/v1/models");
+      return new Response(JSON.stringify({ data: [{ id: "qwen" }] }), {
+        status: 200,
+      });
+    },
+    env,
+  );
+  expect(available).toEqual({
+    name: "provider",
+    status: "AVAILABLE",
+    detail: "local/qwen is listed by the local endpoint",
+  });
+  const missingEndpoint = await diagnoseProvider("local/qwen", fetch, {
+    CHIKU_PROVIDER: "local",
+  });
+  expect(missingEndpoint.status).toBe("CONFIGURATION_REQUIRED");
+});

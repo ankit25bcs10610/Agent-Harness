@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { diagnoseProvider, helpText, parseArgs } from "../src/cli";
+import { diagnoseProvider, helpText, parseArgs, setupText } from "../src/cli";
 import { loadCliConfig } from "../src/cli-config";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -10,6 +10,8 @@ test("CLI help and version parsing are provider-independent", () => {
   expect(parseArgs(["--help"]).command).toBe("help");
   expect(parseArgs(["--version"]).command).toBe("version");
   expect(helpText()).toContain("--workspace <path>");
+  expect(parseArgs(["setup"]).command).toBe("setup");
+  expect(setupText("/tmp/project")).toContain("Credentials are never written");
 });
 
 test("CLI validates options and preserves explicit runtime configuration", () => {

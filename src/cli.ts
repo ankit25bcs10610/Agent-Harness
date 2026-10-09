@@ -5,7 +5,7 @@ import { loadCliConfig } from "./cli-config";
 import { CONFIG } from "./config";
 
 export type CliOptions = {
-  command: "run" | "help" | "version" | "doctor";
+  command: "run" | "help" | "version" | "doctor" | "setup";
   model?: string;
   provider?: string;
   workspace?: string;
@@ -35,6 +35,7 @@ export function helpText() {
 Usage:
   chiku [options]
   chiku doctor
+  chiku setup
 
 Options:
   --help                 Show this help without contacting a provider
@@ -48,6 +49,11 @@ Options:
   --no-color             Disable terminal color output
   --diagnostics          Alias for chiku doctor
 `;
+}
+
+export function setupText(workspace = process.cwd()) {
+  const configured = Boolean(process.env.OPENROUTER_API_KEY);
+  return `Chiku setup — local configuration\n\nWorkspace: ${workspace}\nProvider: OpenRouter\nCredentials: ${configured ? "configured in environment" : "not configured"}\n\n${configured ? "Next: run chiku doctor, then start with chiku --workspace <path>." : "Set OPENROUTER_API_KEY in your shell or an ignored .env file, then run chiku doctor."}\nCredentials are never written by this command.`;
 }
 
 function value(args: readonly string[], index: number, flag: string) {
@@ -71,6 +77,7 @@ export function parseArgs(args: readonly string[]): CliOptions {
     else if (arg === "--version" || arg === "-v") options.command = "version";
     else if (arg === "doctor" || arg === "--diagnostics")
       options.command = "doctor";
+    else if (arg === "setup") options.command = "setup";
     else if (arg === "--continue") options.continueSession = true;
     else if (arg === "--verbose") options.verbose = true;
     else if (arg === "--no-color") options.noColor = true;
@@ -206,6 +213,10 @@ export async function main(args = process.argv.slice(2)) {
   }
   if (options.command === "version") {
     console.log(VERSION);
+    return 0;
+  }
+  if (options.command === "setup") {
+    console.log(setupText(options.workspace ?? process.cwd()));
     return 0;
   }
   if (options.command === "doctor") {

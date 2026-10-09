@@ -3,12 +3,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const temporary = await mkdtemp(join(tmpdir(), "chiku-package-smoke-"));
+const npmEnvironment = {
+  ...process.env,
+  npm_config_cache: join(temporary, "npm-cache"),
+  npm_config_update_notifier: "false",
+};
 try {
   const pack = Bun.spawn(
     ["npm", "pack", "--json", "--pack-destination", temporary],
     {
       stdout: "pipe",
       stderr: "pipe",
+      env: npmEnvironment,
     },
   );
   const [packCode, packOutput] = await Promise.all([
@@ -33,6 +39,7 @@ try {
     {
       stdout: "pipe",
       stderr: "pipe",
+      env: npmEnvironment,
     },
   );
   const [installCode, installOutput] = await Promise.all([

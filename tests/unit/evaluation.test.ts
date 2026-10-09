@@ -13,6 +13,7 @@ import {
   evaluateQualityGate,
   listExperiments,
   proposeImprovements,
+  summarizeEvaluationResults,
   type EvaluationTask,
 } from "../../src/evaluation";
 
@@ -195,6 +196,66 @@ test("comparison and quality gates identify a regression without claiming signif
     }).outcome,
   ).toBe("FAIL");
   expect(proposeImprovements([make("FAIL")])).toEqual([]);
+});
+
+test("statistical summaries keep honest denominators and unknown usage", () => {
+  const make = (status: "PASS" | "BLOCKED") => ({
+    evaluationId: crypto.randomUUID(),
+    runId: crypto.randomUUID(),
+    taskId: status,
+    status,
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    grades: [],
+    trace: [],
+    artifacts: [],
+    metrics: {
+      correctness: {
+        taskPassed: status === "PASS",
+        requiredTestsPassed: status === "PASS",
+        changedFiles: 0,
+        unnecessaryFiles: 0,
+      },
+      efficiency: {
+        durationMs: status === "PASS" ? 10 : 20,
+        toolCalls: 0,
+        modelRequests: 0,
+      },
+      usage: {
+        inputTokens: null,
+        outputTokens: null,
+        totalTokens: status === "PASS" ? 5 : null,
+      },
+      cost: {
+        reportedCents: null,
+        estimatedCents: null,
+        status:
+          status === "PASS" ? ("measured" as const) : ("unknown" as const),
+      },
+      reliability: {
+        providerFailures: 0,
+        toolFailures: 0,
+        interruptions: 0,
+        timeouts: 0,
+      },
+      safety: {
+        unauthorizedAttempts: 0,
+        contractViolations: 0,
+        crossWorkspaceAttempts: 0,
+      },
+    },
+    integrity: {
+      trustedGraderRevision: "test",
+      changedOutsideAllowedPaths: [],
+      graderTampered: false,
+      fixtureContaminated: false,
+    },
+  });
+  const summary = summarizeEvaluationResults([make("PASS"), make("BLOCKED")]);
+  expect(summary.successRate).toBe(1);
+  expect(summary.measuredTokenTrials).toBe(1);
+  expect(summary.measuredCostTrials).toBe(1);
+  expect(summary.limitations.join(" ")).toContain("excluded");
 });
 
 test("trace collector keeps bounded redacted evidence", () => {

@@ -1,5 +1,30 @@
 import { z } from "zod";
 
+export const PilotRequestStatusSchema = z.enum([
+  "REQUESTED",
+  "QUALIFICATION",
+  "SECURITY_REVIEW",
+  "APPROVED",
+  "ONBOARDING",
+  "ACTIVE",
+  "COMPLETED",
+  "PAUSED",
+  "REJECTED",
+]);
+export type PilotRequestStatus = z.infer<typeof PilotRequestStatusSchema>;
+export const PilotRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  requestId: z.string().uuid(),
+  organizationId: z.string().min(1),
+  requestedBy: z.string().min(1),
+  status: PilotRequestStatusSchema,
+  approvedRepositories: z.array(z.string()),
+  approvedModels: z.array(z.string()),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+});
+export type PilotRequest = z.infer<typeof PilotRequestSchema>;
+
 export const PilotStatusSchema = z.enum([
   "draft",
   "authorized",

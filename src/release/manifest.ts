@@ -73,3 +73,25 @@ export async function buildReleaseManifest(input: {
     },
   });
 }
+
+export async function verifyReleaseManifest(
+  manifest: ReleaseManifest,
+  baseDirectory = process.cwd(),
+) {
+  const verified = ReleaseManifestSchema.parse(manifest);
+  const failures: string[] = [];
+  for (const artifact of verified.artifacts) {
+    const path = resolve(baseDirectory, artifact.path);
+    try {
+      const data = await readFile(path);
+      const digest = createHash("sha256").update(data).digest("hex");
+      if (data.byteLength !== artifact.bytes)
+        failures.push(`${artifact.name}: byte length mismatch`);
+      if (digest !== artifact.sha256)
+        failures.push(`${artifact.name}: sha256 mismatch`);
+    } catch {
+      failures.push(`${artifact.name}: artifact unavailable`);
+    }
+  }
+  return { verified: failures.length === 0, failures };
+}

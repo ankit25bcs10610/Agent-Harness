@@ -2,7 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { buildReleaseManifest, ReleaseManifestSchema } from "../../src/release";
+import {
+  buildReleaseManifest,
+  ReleaseManifestSchema,
+  verifyReleaseManifest,
+} from "../../src/release";
 
 describe("release manifest", () => {
   test("records actual artifact size and digest", async () => {
@@ -40,5 +44,25 @@ describe("release manifest", () => {
         artifactPaths: [join(tmpdir(), "does-not-exist-chiku.js")],
       }),
     ).rejects.toThrow();
+  });
+
+  test("rejects a tampered artifact using recorded size and digest", async () => {
+    const directory = join(tmpdir(), `chiku-release-${crypto.randomUUID()}`);
+    await mkdir(directory, { recursive: true });
+    const artifact = join(directory, "chiku.js");
+    await writeFile(artifact, "original artifact");
+    const manifest = await buildReleaseManifest({
+      version: "1.0.0",
+      channel: "stable",
+      sourceRevision: "abc123",
+      sourceState: "clean",
+      artifactPaths: [artifact],
+      builtAt: "2026-10-09T00:00:00.000Z",
+      runtime: { bun: "1.4.2", platform: "darwin", arch: "arm64" },
+    });
+    await writeFile(artifact, "tampered artifact");
+    const result = await verifyReleaseManifest(manifest, "/");
+    expect(result.verified).toBe(false);
+    expect(result.failures.join(" ")).toContain("sha256 mismatch");
   });
 });

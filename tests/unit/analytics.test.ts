@@ -9,6 +9,7 @@ import {
   listAnalyticsEvents,
   recordAnalyticsEvent,
   setAnalyticsConsent,
+  cohortRetention,
 } from "../../src/analytics";
 
 const base = {
@@ -48,5 +49,36 @@ describe("privacy-first local analytics", () => {
     const second = await getInstallationId(directory);
     expect(first).toMatch(/^[0-9a-f-]{36}$/);
     expect(second).toBe(first);
+  });
+
+  test("reports retention from observed events with explicit denominators", () => {
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    const event = (
+      installationId: string,
+      name: "first_launch" | "coding_task_attempted",
+      days: number,
+    ) => ({
+      schemaVersion: 1 as const,
+      eventId: crypto.randomUUID(),
+      name,
+      occurredAt: new Date(Date.UTC(2026, 0, 1 + days)).toISOString(),
+      installationId,
+      productVersion: "1.0.0",
+      properties: {},
+    });
+    const report = cohortRetention([
+      event(first, "first_launch", 0),
+      event(first, "coding_task_attempted", 1),
+      event(second, "first_launch", 0),
+    ]);
+    expect(report[0]).toEqual({
+      day: 1,
+      cohortSize: 2,
+      retainedInstallations: 1,
+      rate: 0.5,
+    });
+    expect(report[1]?.rate).toBe(0);
+    expect(report[2]?.cohortSize).toBe(2);
   });
 });

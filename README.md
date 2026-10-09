@@ -79,6 +79,17 @@ You may use an ignored local `.env` file:
 OPENROUTER_API_KEY=your-openrouter-api-key
 ```
 
+Check first-run configuration without contacting the model:
+
+```bash
+bun src/index.tsx setup
+bun src/index.tsx doctor
+```
+
+`setup` never writes credentials. `doctor` reports local runtime, Git, workspace
+storage, credential configuration, and provider model availability when a key is
+configured.
+
 Start Chiku from the project directory it should work on:
 
 ```bash
@@ -123,6 +134,8 @@ See [docs/EVALUATION.md](docs/EVALUATION.md) for the execution model, safety gua
 ## Installation and packaging
 
 The supported development/runtime requirement is Bun 1.x. Build a local package artifact with `bun run build`, inspect its contents with `npm run package:check`, and run the clean tarball smoke test with `npm run package:test`. The generated executable is `dist/chiku.js`; it is not a public registry release. Use `bun src/index.tsx --help` during development or the packaged `chiku` executable after installation. See [docs/PACKAGING_TRACKER.md](docs/PACKAGING_TRACKER.md) for verified and unavailable platform behavior.
+
+The local documentation site can be generated and served with `bun run website:build` and `bun run website:dev`. It is source-linked to the checked-in README and Markdown guides and never exposes a live agent, shell, or provider credential to visitors.
 
 ## High-level system architecture
 
@@ -358,6 +371,9 @@ Shortcuts in `src/ui/App.tsx` expand into agent instructions; they do not bypass
 | `/commit`    | Review and prepare a commit after approval.               |
 | `/deploy`    | Explain deployment and require approval before deploying. |
 
+| `/health` | Report measured local runtime and configuration health. |
+| `/incidents` | Inspect locally persisted, redacted crash incidents. |
+
 External command availability depends on the target repository.
 
 ## Configuration
@@ -457,7 +473,7 @@ Chiku is not enterprise-secure, sandboxed, or production-hardened by virtue of t
 - Limited editing interface: create-new-file and exact text replacement.
 - Session-scoped in-memory permission rules.
 - Local, unencrypted JSON sessions.
-- Most slash commands are prompt shortcuts; workspace and multi-agent diagnostics call runtime services directly.
+- Most slash commands are prompt shortcuts; `/health` and `/incidents` use local runtime services directly and do not require an LLM request.
 - Compaction is lossy.
 
 ## Roadmap

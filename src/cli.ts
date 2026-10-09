@@ -1,11 +1,12 @@
 import { existsSync, accessSync, constants, readFileSync } from "node:fs";
-import { homedir, platform, release } from "node:os";
+import { arch, homedir, platform, release } from "node:os";
 import { join, resolve } from "node:path";
 import { loadCliConfig } from "./cli-config";
 import { CONFIG } from "./config";
+import { loadOperationalConfig } from "./ops";
 
 export type CliOptions = {
-  command: "run" | "help" | "version" | "doctor" | "setup";
+  command: "run" | "help" | "version" | "doctor" | "setup" | "install-status";
   model?: string;
   provider?: string;
   workspace?: string;
@@ -36,6 +37,7 @@ Usage:
   chiku [options]
   chiku doctor
   chiku setup
+  chiku install-status
 
 Options:
   --help                 Show this help without contacting a provider
@@ -54,6 +56,28 @@ Options:
 export function setupText(workspace = process.cwd()) {
   const configured = Boolean(process.env.OPENROUTER_API_KEY);
   return `Chiku setup — local configuration\n\nWorkspace: ${workspace}\nProvider: OpenRouter\nCredentials: ${configured ? "configured in environment" : "not configured"}\n\n${configured ? "Next: run chiku doctor, then start with chiku --workspace <path>." : "Set OPENROUTER_API_KEY in your shell or an ignored .env file, then run chiku doctor."}\nCredentials are never written by this command.`;
+}
+
+export function installationStatus(workspace = process.cwd()) {
+  const operational = loadOperationalConfig();
+  return {
+    version: VERSION,
+    runtime: typeof Bun !== "undefined" ? `bun ${Bun.version}` : "unknown",
+    platform: platform(),
+    architecture: arch(),
+    workspace,
+    configurationDirectory: join(homedir(), ".chiku"),
+    projectConfigurationDirectory: join(workspace, ".chiku"),
+    git: Bun.which("git") ? "available" : "unavailable",
+    credentialStorage: "environment-or-ignored-dotenv",
+    sandbox: "not-provided-by-this-distribution",
+    automaticUpdates: "not-enabled",
+    installationMethod: process.env.CHIKU_VERSION
+      ? "compiled-or-packaged"
+      : "source-or-runtime",
+    operationalEnvironment: operational.environment,
+    hostedControlPlane: operational.hostedControlPlane,
+  } as const;
 }
 
 function value(args: readonly string[], index: number, flag: string) {
@@ -78,6 +102,7 @@ export function parseArgs(args: readonly string[]): CliOptions {
     else if (arg === "doctor" || arg === "--diagnostics")
       options.command = "doctor";
     else if (arg === "setup") options.command = "setup";
+    else if (arg === "install-status") options.command = "install-status";
     else if (arg === "--continue") options.continueSession = true;
     else if (arg === "--verbose") options.verbose = true;
     else if (arg === "--no-color") options.noColor = true;
@@ -217,6 +242,16 @@ export async function main(args = process.argv.slice(2)) {
   }
   if (options.command === "setup") {
     console.log(setupText(options.workspace ?? process.cwd()));
+    return 0;
+  }
+  if (options.command === "install-status") {
+    console.log(
+      JSON.stringify(
+        installationStatus(options.workspace ?? process.cwd()),
+        null,
+        2,
+      ),
+    );
     return 0;
   }
   if (options.command === "doctor") {

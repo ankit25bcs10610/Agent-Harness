@@ -34,6 +34,7 @@
     "dev": "bun src/index.tsx",
     "website:dev": "bun scripts/website-server.ts",
     "website:build": "bun scripts/build-website-docs.ts",
+    "website:seo": "bun scripts/build-website-seo.ts",
     "watch": "bun --watch src/index.tsx",
     "typecheck": "tsc --noEmit",
     "format:ci": "prettier --check tests .github/workflows/ci.yml package.json",

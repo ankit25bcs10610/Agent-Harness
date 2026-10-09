@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible problem in Chiku.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include API keys, private source code, session files, or confidential logs."
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest safe reproduction and command used.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Chiku version
+      placeholder: "Output of chiku --version"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "OS, architecture, and Bun version"
+    validations:
+      required: true

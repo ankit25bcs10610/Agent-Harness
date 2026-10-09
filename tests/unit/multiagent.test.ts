@@ -15,6 +15,7 @@ import {
   createDefaultAgentRegistry,
   loadAgentSession,
   saveAgentSession,
+  chooseExecutionMode,
 } from "../../src/multiagent";
 import { runTool } from "../../src/tool/registry";
 import type { AgentSessionState, AgentTask } from "../../src/multiagent";
@@ -85,6 +86,20 @@ test("task graph enforces dependencies and rejects cycles", () => {
   graph.update(first.id, "succeeded");
   expect(graph.ready().map((value) => value.id)).toEqual([second.id]);
   expect(() => graph.addDependency(first.id, second.id)).toThrow("cycle");
+});
+
+test("routing chooses bounded execution modes from task metadata", () => {
+  const first = task();
+  const second = task("tester");
+  expect(chooseExecutionMode([first, second])).toMatchObject({
+    mode: "parallel_specialists",
+  });
+  second.risk = "high";
+  expect(chooseExecutionMode([first, second])).toMatchObject({
+    mode: "reviewer_assisted",
+    requiresReview: true,
+  });
+  expect(chooseExecutionMode([first])).toMatchObject({ mode: "single_agent" });
 });
 
 test("decomposer validates model-produced task definitions and bounds depth", async () => {

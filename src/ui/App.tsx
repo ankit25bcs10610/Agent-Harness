@@ -101,6 +101,8 @@ const COMMANDS: Record<string, string> = {
     "Show local runtime, workspace, storage, and credential configuration health.",
   "/incidents":
     "Inspect locally persisted crash incidents. No external report is submitted.",
+  "/performance":
+    "Show measured execution, context, and token statistics from the current session.",
 };
 
 function resolveCommand(text: string): string {
@@ -585,6 +587,38 @@ export function App({ systemPrompt, session, config }: Props) {
         setRunning(false);
         abortRef.current = null;
       }
+      return;
+    }
+    if (localCommand === "/performance") {
+      const execution = sessionRef.current.state?.execution;
+      push(
+        "assistant",
+        JSON.stringify(
+          {
+            execution: execution ?? null,
+            context: contextDiagnostics
+              ? {
+                  estimatedTokens: contextDiagnostics.estimatedTokens,
+                  budgetTokens: contextDiagnostics.budgetTokens,
+                  retainedMessages: contextDiagnostics.retainedMessages,
+                  rawMessages: contextDiagnostics.rawMessages,
+                  prunedMessages: contextDiagnostics.prunedMessages,
+                  memoryEntries: contextDiagnostics.memoryEntries,
+                  compactionCount: contextDiagnostics.compactionCount,
+                  usageRatio: contextDiagnostics.usageRatio,
+                }
+              : null,
+            cost: {
+              status: "unknown",
+              reason: "No provider billing data is configured.",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      setRunning(false);
+      abortRef.current = null;
       return;
     }
     if (localCommand && localTools[localCommand]) {

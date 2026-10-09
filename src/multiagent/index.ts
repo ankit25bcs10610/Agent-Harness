@@ -10,3 +10,4 @@ export * from "./coordinator";
 export * from "./workspace";
 export * from "./review";
 export * from "./conflicts";
+export * from "./routing";

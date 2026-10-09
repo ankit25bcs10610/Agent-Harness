@@ -63,22 +63,22 @@ Inspected the agent loop, process executor/isolation, permission engine, patch e
 
 ## Security test matrix
 
-| Scenario | Result | Evidence |
-|---|---|---|
-| Path traversal / workspace escape | PASS | `tests/unit/permission.test.ts` |
-| Symlink escape and replacement race | PASS | `tests/unit/permission.test.ts`, patch tests |
-| Sensitive direct file access | PASS | permission tests |
-| Multi-file patch with forbidden target | PASS | `tests/unit/patch.test.ts` |
-| Stale/concurrent patch and safe undo | PASS | patch tests |
-| Process timeout/cancellation/output bound | PASS | `tests/unit/process.test.ts` |
-| Requested unavailable isolation | PASS / fail-closed | process tests |
-| Actual host filesystem sandbox escape | NOT_RUN | no enforceable backend is registered |
-| Network-disabled sandbox egress | NOT_RUN | no enforceable backend is registered |
-| MCP stdio lifecycle and authorization | PASS | `tests/integration/mcp.test.ts` |
-| Remote MCP SSRF defense | NOT_RUN | no authorized remote fixture supplied |
-| Session secret persistence | PASS for synthetic fixtures | session tests |
-| Multi-agent authorization/workspace isolation | PASS for deterministic fixtures | multi-agent tests |
-| Dependency audit | BLOCKED | npm registry DNS resolution failed during `bun audit` |
+| Scenario                                      | Result                          | Evidence                                              |
+| --------------------------------------------- | ------------------------------- | ----------------------------------------------------- |
+| Path traversal / workspace escape             | PASS                            | `tests/unit/permission.test.ts`                       |
+| Symlink escape and replacement race           | PASS                            | `tests/unit/permission.test.ts`, patch tests          |
+| Sensitive direct file access                  | PASS                            | permission tests                                      |
+| Multi-file patch with forbidden target        | PASS                            | `tests/unit/patch.test.ts`                            |
+| Stale/concurrent patch and safe undo          | PASS                            | patch tests                                           |
+| Process timeout/cancellation/output bound     | PASS                            | `tests/unit/process.test.ts`                          |
+| Requested unavailable isolation               | PASS / fail-closed              | process tests                                         |
+| Actual host filesystem sandbox escape         | NOT_RUN                         | no enforceable backend is registered                  |
+| Network-disabled sandbox egress               | NOT_RUN                         | no enforceable backend is registered                  |
+| MCP stdio lifecycle and authorization         | PASS                            | `tests/integration/mcp.test.ts`                       |
+| Remote MCP SSRF defense                       | NOT_RUN                         | no authorized remote fixture supplied                 |
+| Session secret persistence                    | PASS for synthetic fixtures     | session tests                                         |
+| Multi-agent authorization/workspace isolation | PASS for deterministic fixtures | multi-agent tests                                     |
+| Dependency audit                              | BLOCKED                         | npm registry DNS resolution failed during `bun audit` |
 
 Executed targeted suite: **44 passed, 0 failed, 95 assertions**.  
 Executed security scan: **260 tracked files inspected, passed**.
@@ -87,20 +87,20 @@ Executed security scan: **260 tracked files inspected, passed**.
 
 Scores are engineering assessment scores, not certification:
 
-| Category | Score | Basis |
-|---|---:|---|
-| Sandbox isolation | 2/10 | No registered OS-enforced backend |
-| Filesystem security | 8/10 | Canonical paths, symlink checks, sensitive paths tested |
-| Permission architecture | 8/10 | Central registry and per-target patch authorization tested |
-| Patch safety | 8/10 | Hash/precondition/rollback protections tested |
-| MCP security | 5/10 | Stdio and capability checks tested; remote SSRF policy incomplete |
-| Prompt-injection resistance | 6/10 | Deterministic authorization is independent of model text; broader adversarial corpus remains |
-| Multi-agent authorization | 7/10 | Bounded workers, workspaces, and contracts tested |
-| Secret management | 6/10 | Redaction/filtering/session exclusion tested; OS keychain and full egress policy absent |
-| Supply chain | 5/10 | Lockfile and CI checks exist; advisory query was unavailable |
-| CI/CD security | 6/10 | CI/security checks exist; full external workflow review not performed here |
-| Session privacy | 7/10 | Atomic, bounded, schema-checked local persistence |
-| Runtime resilience | 7/10 | Budgets, cancellation, retries, and recovery tested |
+| Category                    | Score | Basis                                                                                        |
+| --------------------------- | ----: | -------------------------------------------------------------------------------------------- |
+| Sandbox isolation           |  2/10 | No registered OS-enforced backend                                                            |
+| Filesystem security         |  8/10 | Canonical paths, symlink checks, sensitive paths tested                                      |
+| Permission architecture     |  8/10 | Central registry and per-target patch authorization tested                                   |
+| Patch safety                |  8/10 | Hash/precondition/rollback protections tested                                                |
+| MCP security                |  5/10 | Stdio and capability checks tested; remote SSRF policy incomplete                            |
+| Prompt-injection resistance |  6/10 | Deterministic authorization is independent of model text; broader adversarial corpus remains |
+| Multi-agent authorization   |  7/10 | Bounded workers, workspaces, and contracts tested                                            |
+| Secret management           |  6/10 | Redaction/filtering/session exclusion tested; OS keychain and full egress policy absent      |
+| Supply chain                |  5/10 | Lockfile and CI checks exist; advisory query was unavailable                                 |
+| CI/CD security              |  6/10 | CI/security checks exist; full external workflow review not performed here                   |
+| Session privacy             |  7/10 | Atomic, bounded, schema-checked local persistence                                            |
+| Runtime resilience          |  7/10 | Budgets, cancellation, retries, and recovery tested                                          |
 
 ## Prioritized remediation
 

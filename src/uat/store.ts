@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { UatRecordSchema, type UatRecord, type UatStatus } from "./types";
@@ -31,15 +31,29 @@ export async function saveUatRecord(
 }
 
 export async function loadUatRecords(directory: string): Promise<UatRecord[]> {
-  const files = (await Bun.file(join(directory, "index.json")).exists())
-    ? [join(directory, "index.json")]
-    : [];
+  let names: string[] = [];
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const files = names
+    .filter((name) => name === "index.json" || /^[0-9a-f-]+\.json$/i.test(name))
+    .map((name) => join(directory, name));
   const records: UatRecord[] = [];
+  const seen = new Set<string>();
   for (const path of files) {
     try {
       const parsed = JSON.parse(await readFile(path, "utf8"));
-      if (Array.isArray(parsed))
-        records.push(...parsed.map((item) => UatRecordSchema.parse(item)));
+      const values = Array.isArray(parsed) ? parsed : [parsed];
+      for (const item of values) {
+        const record = UatRecordSchema.parse(item);
+        if (!seen.has(record.recordId)) {
+          seen.add(record.recordId);
+          records.push(record);
+        }
+      }
     } catch {
       // Corrupt local evidence is omitted, never converted to a pass.
     }

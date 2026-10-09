@@ -21,3 +21,5 @@ export { requestJson } from "./transport";
 export { completeWithFallback } from "./fallback";
 export { createOpenAICompatibleAdapter } from "./openai-compatible";
 export type { CompatibleProviderConfig } from "./openai-compatible";
+export { chooseModel } from "./router";
+export type { RoutingDecision, RoutingPolicy, RoutingRequest } from "./router";

@@ -3,6 +3,7 @@ import type {
   ProcessRequest,
   PreparedProcess,
 } from "./types";
+import { MacosSandboxBackend } from "./macos-sandbox";
 
 /**
  * No isolation backend is enabled by default. Requesting one that has not been
@@ -28,3 +29,6 @@ export class IsolationRegistry {
 }
 
 export const isolationRegistry = new IsolationRegistry();
+if (process.platform === "darwin") {
+  isolationRegistry.register(new MacosSandboxBackend());
+}

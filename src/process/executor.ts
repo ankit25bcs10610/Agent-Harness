@@ -139,7 +139,21 @@ export class ProcessExecutor {
     if (!Number.isInteger(maxOutputChars) || maxOutputChars <= 0) {
       throw new Error("maxOutputChars must be a positive integer");
     }
-    if (request.requireIsolation && !request.isolation) {
+    const effectiveRequest =
+      request.requireIsolation && !request.isolation
+        ? {
+            ...request,
+            isolation: {
+              backend: "macos-seatbelt",
+              workspace: request.workspaceRoot ?? process.cwd(),
+            },
+          }
+        : request;
+    if (
+      request.requireIsolation &&
+      process.platform !== "darwin" &&
+      !request.isolation
+    ) {
       return {
         stdout: "",
         stderr: "secure execution requires an OS-enforced isolation backend",
@@ -153,7 +167,7 @@ export class ProcessExecutor {
 
     let prepared: PreparedProcess;
     try {
-      prepared = await this.isolation.prepare(request);
+      prepared = await this.isolation.prepare(effectiveRequest);
     } catch (error) {
       return {
         stdout: "",
@@ -179,9 +193,11 @@ export class ProcessExecutor {
         failure: "spawn",
       };
     }
-    const [file, args] = shell
-      ? [request.command, []]
-      : splitCommand(request.command);
+    const [file, args] = prepared.file
+      ? [prepared.file, prepared.args ?? []]
+      : shell
+        ? [request.command, []]
+        : splitCommand(request.command);
     let cwd: string | undefined;
     if (request.cwd ?? prepared.cwd) {
       const requestedCwd = request.cwd ?? prepared.cwd!;
@@ -265,7 +281,13 @@ export class ProcessExecutor {
       child.on("close", (exitCode, exitSignal) => {
         if (timer) clearTimeout(timer);
         if (truncated && !failure) failure = "output_limit";
-        if (exitCode !== 0 && !failure) failure = "exit";
+        if (
+          prepared.isolated &&
+          exitCode === 71 &&
+          stderr.includes("sandbox_apply")
+        ) {
+          failure = "isolation_unavailable";
+        } else if (exitCode !== 0 && !failure) failure = "exit";
         const completed: ProcessResult = {
           stdout,
           stderr,

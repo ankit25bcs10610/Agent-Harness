@@ -35,9 +35,12 @@ export type ProcessResult = {
 };
 
 export type PreparedProcess = {
+  file?: string;
+  args?: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   shell?: boolean;
+  isolated?: boolean;
 };
 
 export type IsolationBackend = {

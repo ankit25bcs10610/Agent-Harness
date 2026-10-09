@@ -292,6 +292,21 @@ test("pinned fixtures fail closed when their HEAD cannot be verified", async () 
   expect(result.error).toContain("fixture base commit mismatch");
 });
 
+test("dedicated evaluation workspaces stay outside the source fixture", async () => {
+  await fixture();
+  const environment = await new EvaluationEngine().environments.prepare(
+    task({ allowedWorkspaces: "dedicated" }),
+    "evaluation-id",
+    new AbortController().signal,
+  );
+  try {
+    expect(environment.root.startsWith(root)).toBe(false);
+    expect(environment.workspaceId).toBeDefined();
+  } finally {
+    await environment.cleanup?.();
+  }
+});
+
 test("evaluation fails when the real adapter exceeds declared budgets", async () => {
   await fixture();
   const result = await new EvaluationEngine().evaluateTask(

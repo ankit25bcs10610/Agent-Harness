@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { basename, relative, resolve } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 
 export const ReleaseArtifactSchema = z.object({
@@ -32,22 +32,38 @@ export const ReleaseManifestSchema = z.object({
 
 export type ReleaseManifest = z.infer<typeof ReleaseManifestSchema>;
 
+function isOutside(baseDirectory: string, candidate: string) {
+  const relativePath = relative(baseDirectory, candidate);
+  return (
+    isAbsolute(relativePath) ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`)
+  );
+}
+
 export async function buildReleaseManifest(input: {
   version: string;
   channel: ReleaseManifest["channel"];
   sourceRevision: string;
   sourceState: ReleaseManifest["sourceState"];
   artifactPaths: readonly string[];
+  baseDirectory?: string;
   builtAt?: string;
   runtime?: { bun: string; platform: string; arch: string };
 }): Promise<ReleaseManifest> {
+  const baseDirectory = await realpath(input.baseDirectory ?? process.cwd());
   const artifacts = [];
   for (const artifactPath of input.artifactPaths) {
-    const path = resolve(artifactPath);
+    const path = await realpath(resolve(artifactPath));
+    if (isOutside(baseDirectory, path)) {
+      throw new Error(
+        `release artifact must be inside ${baseDirectory}: ${artifactPath}`,
+      );
+    }
     const data = await readFile(path);
     artifacts.push({
       name: basename(path),
-      path: relative(process.cwd(), path).split("\\").join("/"),
+      path: relative(baseDirectory, path).split("\\").join("/"),
       bytes: data.byteLength,
       sha256: createHash("sha256").update(data).digest("hex"),
     });
@@ -79,11 +95,27 @@ export async function verifyReleaseManifest(
   baseDirectory = process.cwd(),
 ) {
   const verified = ReleaseManifestSchema.parse(manifest);
+  const resolvedBaseDirectory = await realpath(baseDirectory).catch(() => null);
   const failures: string[] = [];
+  if (!resolvedBaseDirectory) {
+    return {
+      verified: false,
+      failures: ["release base directory unavailable"],
+    };
+  }
   for (const artifact of verified.artifacts) {
-    const path = resolve(baseDirectory, artifact.path);
+    if (isAbsolute(artifact.path)) {
+      failures.push(`${artifact.name}: absolute artifact path is not allowed`);
+      continue;
+    }
+    const path = resolve(resolvedBaseDirectory, artifact.path);
     try {
-      const data = await readFile(path);
+      const realArtifactPath = await realpath(path);
+      if (isOutside(resolvedBaseDirectory, realArtifactPath)) {
+        failures.push(`${artifact.name}: artifact escapes release directory`);
+        continue;
+      }
+      const data = await readFile(realArtifactPath);
       const digest = createHash("sha256").update(data).digest("hex");
       if (data.byteLength !== artifact.bytes)
         failures.push(`${artifact.name}: byte length mismatch`);

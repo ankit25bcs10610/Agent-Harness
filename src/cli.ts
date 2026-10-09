@@ -75,15 +75,24 @@ export function setupText(workspace = process.cwd()) {
   const workspaceCheck = status("workspace");
   const providerCheck = status("provider credentials");
   const ready = checks.every((check) => check.status !== "FAIL");
-  const providerNext =
-    providerCheck?.status === "PASS"
+  const localMode =
+    process.env.CHIKU_PROVIDER === "local" ||
+    process.env.CHIKU_MODEL?.startsWith("local/") === true;
+  const providerName = localMode
+    ? "Local OpenAI-compatible endpoint"
+    : "OpenRouter";
+  const providerNext = localMode
+    ? process.env.CHIKU_LOCAL_BASE_URL
+      ? "Run chiku local-status, then start Chiku with an explicitly selected local model."
+      : "Set CHIKU_LOCAL_BASE_URL to a loopback OpenAI-compatible endpoint; Chiku will not fall back to the cloud."
+    : providerCheck?.status === "PASS"
       ? "Run chiku doctor to validate provider reachability and model support."
       : "Set OPENROUTER_API_KEY in your shell or an ignored .env file, then run chiku doctor.";
   return `Chiku setup — local configuration
 
 Workspace: ${workspace}
 Workspace check: ${workspaceCheck?.status ?? "NOT_RUN"}
-Provider: OpenRouter
+Provider: ${providerName}
 Credentials: ${providerCheck?.detail ?? "not checked"}
 Setup status: ${ready ? "ready for validation" : "action required"}
 
@@ -170,6 +179,10 @@ export function parseArgs(args: readonly string[]): CliOptions {
 export function diagnostics(workspace = process.cwd()) {
   const projectChiku = join(workspace, ".chiku");
   const userChiku = join(homedir(), ".chiku");
+  const localMode =
+    process.env.CHIKU_PROVIDER === "local" ||
+    process.env.CHIKU_MODEL?.startsWith("local/") === true;
+  const localEndpoint = localEndpointFromEnv();
   const checks = [
     {
       name: "runtime",
@@ -203,10 +216,20 @@ export function diagnostics(workspace = process.cwd()) {
     },
     {
       name: "provider credentials",
-      status: process.env.OPENROUTER_API_KEY ? "PASS" : "WARNING",
-      detail: process.env.OPENROUTER_API_KEY
-        ? "configured"
-        : "not configured; interactive requests will require setup",
+      status: localMode
+        ? localEndpoint && inspectLocalEndpoint(localEndpoint).allowed
+          ? "PASS"
+          : "WARNING"
+        : process.env.OPENROUTER_API_KEY
+          ? "PASS"
+          : "WARNING",
+      detail: localMode
+        ? localEndpoint
+          ? `local endpoint ${inspectLocalEndpoint(localEndpoint).reason}; reachability is not tested`
+          : "local endpoint is not configured; cloud fallback is disabled"
+        : process.env.OPENROUTER_API_KEY
+          ? "configured"
+          : "not configured; interactive requests will require setup",
     },
   ];
   return checks;
@@ -362,7 +385,14 @@ export async function main(args = process.argv.slice(2)) {
   }
   if (options.model) process.env.CHIKU_MODEL = options.model;
   if (options.provider) process.env.CHIKU_PROVIDER = options.provider;
-  const { launch } = await import("./runtime");
-  await launch(options);
-  return 0;
+  try {
+    const { launch } = await import("./runtime");
+    await launch(options);
+    return 0;
+  } catch (error) {
+    console.error(
+      `chiku: unable to start: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
 }

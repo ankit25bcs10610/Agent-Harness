@@ -2,7 +2,10 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { LocalSubscriptionStore } from "../../src/commercial";
+import {
+  LocalSubscriptionStore,
+  signBillingPayload,
+} from "../../src/commercial";
 
 const event = (tenantId = "tenant-a", eventId = "evt-1") => ({
   eventId,
@@ -72,4 +75,22 @@ test("older verified provider events cannot overwrite newer subscription state",
   });
   expect(result).toMatchObject({ applied: false, reason: "out_of_order" });
   expect((await store.subscription())?.status).toBe("active");
+});
+
+test("webhook application requires a valid provider signature", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "chiku-billing-"));
+  const store = new LocalSubscriptionStore(directory, "tenant-a");
+  const secret = "fixture-webhook-secret";
+  const payload = JSON.stringify(event());
+  await expect(
+    store.applyWebhook({ payload, signature: "0".repeat(64) }, secret),
+  ).rejects.toThrow("signature verification");
+  expect(
+    (
+      await store.applyWebhook(
+        { payload, signature: signBillingPayload(payload, secret) },
+        secret,
+      )
+    ).applied,
+  ).toBe(true);
 });

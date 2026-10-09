@@ -82,6 +82,8 @@ export class LocalFinancialLedger {
       "schemaVersion" | "eventId" | "tenantId" | "recordedAt"
     > & { eventId?: string },
   ) {
+    if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor < 0)
+      throw new Error("financial amount must be a non-negative safe integer");
     const event = FinancialEventSchema.parse({
       schemaVersion: 1,
       eventId: input.eventId ?? randomUUID(),

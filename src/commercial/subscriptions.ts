@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 export const SubscriptionStatusSchema = z.enum([
@@ -40,6 +40,32 @@ export const VerifiedBillingEventSchema = z.object({
   providerOccurredAt: z.string().datetime({ offset: true }).optional(),
 });
 export type VerifiedBillingEvent = z.infer<typeof VerifiedBillingEventSchema>;
+
+export const BillingWebhookSchema = z.object({
+  payload: z.string().min(1),
+  signature: z.string().regex(/^[0-9a-f]{64}$/i),
+});
+export type BillingWebhook = z.infer<typeof BillingWebhookSchema>;
+
+export function signBillingPayload(payload: string, secret: string) {
+  if (!secret) throw new Error("billing webhook secret is required");
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+export function verifyBillingWebhook(
+  input: unknown,
+  secret: string,
+): VerifiedBillingEvent {
+  const webhook = BillingWebhookSchema.parse(input);
+  const expected = Buffer.from(signBillingPayload(webhook.payload, secret));
+  const received = Buffer.from(webhook.signature.toLowerCase());
+  if (
+    expected.length !== received.length ||
+    !timingSafeEqual(expected, received)
+  )
+    throw new Error("billing webhook signature verification failed");
+  return VerifiedBillingEventSchema.parse(JSON.parse(webhook.payload));
+}
 
 export const EntitlementSchema = z.object({
   tenantId: z.string().min(1),
@@ -127,6 +153,11 @@ export class LocalSubscriptionStore {
     await atomicWrite(subscriptionsFile(this.directory), allSubscriptions);
     await atomicWrite(eventsFile(this.directory), events.concat(event));
     return { applied: true, reason: "applied" as const, subscription };
+  }
+
+  /** Apply only after cryptographic webhook verification. */
+  async applyWebhook(input: unknown, secret: string) {
+    return this.applyVerifiedEvent(verifyBillingWebhook(input, secret));
   }
 
   async entitlement(): Promise<Entitlement> {

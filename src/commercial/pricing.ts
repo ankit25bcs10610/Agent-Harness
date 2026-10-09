@@ -49,6 +49,8 @@ export function quoteMinorUnits(plan: PricingPlan, quantity: number) {
       amountMinor: null,
       currency: plan.currency,
     };
+  if (!Number.isSafeInteger(plan.amountMinor))
+    throw new Error("pricing amount must be a safe integer");
   const amountMinor = plan.amountMinor * quantity;
   if (!Number.isSafeInteger(amountMinor))
     throw new Error("quote exceeds safe integer precision");

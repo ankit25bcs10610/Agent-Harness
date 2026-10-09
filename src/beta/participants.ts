@@ -43,12 +43,14 @@ export const BetaParticipantSchema = z.object({
   id: z.string().uuid(),
   programId: z.string().min(1),
   contactHash: z.string().length(64),
+  accessTokenHash: z.string().length(64).optional(),
   platform: z.string().min(1),
   consent: BetaConsentSchema,
   enrolledAt: z.string().datetime({ offset: true }),
   lastSeenAt: z.string().datetime({ offset: true }),
 });
 export type BetaParticipant = z.infer<typeof BetaParticipantSchema>;
+export type BetaEnrollment = BetaParticipant & { accessToken: string };
 
 const DatabaseSchema = z.object({
   schemaVersion: z.literal(1),
@@ -205,11 +207,13 @@ export async function enrollBetaParticipant(
     )
   )
     throw new Error("participant already enrolled");
+  const accessToken = randomBytes(32).toString("base64url");
   const participant = BetaParticipantSchema.parse({
     schemaVersion: 1,
     id: randomUUID(),
     programId: program.id,
     contactHash,
+    accessTokenHash: hash(accessToken),
     platform: input.platform,
     consent: {
       schemaVersion: 1,
@@ -223,19 +227,21 @@ export async function enrollBetaParticipant(
   invitation.enrolledParticipantId = participant.id;
   database.participants.push(participant);
   await save(directory, database);
-  return participant;
+  return { ...participant, accessToken } satisfies BetaEnrollment;
 }
 
 export async function withdrawBetaConsent(
   directory: string,
   participantId: string,
+  accessToken: string,
   now = new Date(),
 ) {
   const database = await load(directory);
   const participant = database.participants.find(
     (entry) => entry.id === participantId,
   );
-  if (!participant) throw new Error("unknown participant");
+  if (!participant || participant.accessTokenHash !== hash(accessToken))
+    throw new Error("participant authorization failed");
   if (!participant.consent.withdrawnAt)
     participant.consent.withdrawnAt = now.toISOString();
   await save(directory, database);
@@ -246,11 +252,15 @@ export async function getBetaParticipant(
   directory: string,
   participantId: string,
   programId: string,
+  accessToken: string,
 ) {
   const participant = (await load(directory)).participants.find(
-    (entry) => entry.id === participantId && entry.programId === programId,
+    (entry) =>
+      entry.id === participantId &&
+      entry.programId === programId &&
+      entry.accessTokenHash === hash(accessToken),
   );
-  if (!participant) throw new Error("participant not found in program");
+  if (!participant) throw new Error("participant authorization failed");
   return participant;
 }
 

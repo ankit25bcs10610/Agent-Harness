@@ -49,3 +49,9 @@ test("unapproved or unknown pricing never becomes a zero quote", () => {
     currency: "USD",
   });
 });
+
+test("pricing rejects unsafe integer amounts before multiplication", () => {
+  expect(() =>
+    quoteMinorUnits({ ...plan, amountMinor: Number.MAX_SAFE_INTEGER + 1 }, 1),
+  ).toThrow("safe integer");
+});

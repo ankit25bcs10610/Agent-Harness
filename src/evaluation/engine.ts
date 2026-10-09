@@ -253,6 +253,7 @@ export class EvaluationEngine {
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", abortFromCaller);
+      await environment?.cleanup?.();
     }
   }
 

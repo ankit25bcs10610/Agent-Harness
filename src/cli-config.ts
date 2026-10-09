@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const CliConfigSchema = z.object({
   model: z.string().min(1).optional(),
-  provider: z.string().min(1).optional(),
+  provider: z.enum(["openrouter", "local"]).optional(),
   sessionDirectory: z.string().min(1).optional(),
   noColor: z.boolean().optional(),
 });
@@ -34,11 +34,11 @@ export async function loadCliConfig(explicitPath?: string): Promise<CliConfig> {
       ];
   let result: CliConfig = {};
   for (const path of paths) result = { ...result, ...(await readConfig(path)) };
-  return {
+  return CliConfigSchema.parse({
     ...result,
     ...(process.env.CHIKU_MODEL ? { model: process.env.CHIKU_MODEL } : {}),
     ...(process.env.CHIKU_PROVIDER
       ? { provider: process.env.CHIKU_PROVIDER }
       : {}),
-  };
+  });
 }

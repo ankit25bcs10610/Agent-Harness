@@ -50,10 +50,12 @@ test("configuration loads from an explicit file without persisting credentials",
   const path = join(directory, "config.json");
   await writeFile(
     path,
-    JSON.stringify({ model: "local/model", provider: "ollama" }),
+    JSON.stringify({ model: "local/model", provider: "local" }),
   );
   const config = await loadCliConfig(path);
-  expect(config).toEqual({ model: "local/model", provider: "ollama" });
+  expect(config).toEqual({ model: "local/model", provider: "local" });
+  await writeFile(path, JSON.stringify({ provider: "ollama" }));
+  await expect(loadCliConfig(path)).rejects.toThrow("invalid Chiku config");
   await rm(directory, { recursive: true, force: true });
 });
 

@@ -8,6 +8,21 @@ import {
   transitionPilotRequest,
   type PilotEvaluation,
 } from "../../src/pilot";
+import type { TeamMembership } from "../../src/team";
+
+function actor(
+  role: TeamMembership["role"] = "OWNER",
+  organizationId = "org-a",
+): { membership: TeamMembership } {
+  return {
+    membership: {
+      userId: `${role.toLowerCase()}-user`,
+      organizationId,
+      role,
+      active: true,
+    },
+  };
+}
 
 function evaluation(organizationId = "org-a"): PilotEvaluation {
   const now = new Date().toISOString();
@@ -32,11 +47,11 @@ function evaluation(organizationId = "org-a"): PilotEvaluation {
 
 describe("pilot evaluation lifecycle", () => {
   test("requires authorization before activation", () => {
-    const authorized = transitionPilot(evaluation(), "authorized", "org-a");
-    expect(transitionPilot(authorized, "active", "org-a").status).toBe(
+    const authorized = transitionPilot(evaluation(), "authorized", actor());
+    expect(transitionPilot(authorized, "active", actor()).status).toBe(
       "active",
     );
-    expect(() => transitionPilot(evaluation(), "active", "org-a")).toThrow(
+    expect(() => transitionPilot(evaluation(), "active", actor())).toThrow(
       "invalid pilot transition",
     );
   });
@@ -60,15 +75,15 @@ describe("pilot request lifecycle", () => {
       },
       new Date("2026-01-01T00:00:00.000Z"),
     );
-    const qualified = transitionPilotRequest(request, "QUALIFICATION", "org-a");
+    const qualified = transitionPilotRequest(request, "QUALIFICATION", actor());
     const reviewed = transitionPilotRequest(
       qualified,
       "SECURITY_REVIEW",
-      "org-a",
+      actor(),
     );
-    const approved = transitionPilotRequest(reviewed, "APPROVED", "org-a");
+    const approved = transitionPilotRequest(reviewed, "APPROVED", actor());
     expect(approved.status).toBe("APPROVED");
-    expect(() => transitionPilotRequest(request, "APPROVED", "org-a")).toThrow(
+    expect(() => transitionPilotRequest(request, "APPROVED", actor())).toThrow(
       "invalid pilot request transition",
     );
   });
@@ -88,11 +103,24 @@ describe("pilot request lifecycle", () => {
       "ONBOARDING",
       "ACTIVE",
     ] as const)
-      request = transitionPilotRequest(request, status, "org-a");
-    request = transitionPilotRequest(request, "PAUSED", "org-a");
-    request = transitionPilotRequest(request, "ACTIVE", "org-a");
-    expect(transitionPilotRequest(request, "COMPLETED", "org-a").status).toBe(
+      request = transitionPilotRequest(request, status, actor());
+    request = transitionPilotRequest(request, "PAUSED", actor());
+    request = transitionPilotRequest(request, "ACTIVE", actor());
+    expect(transitionPilotRequest(request, "COMPLETED", actor()).status).toBe(
       "COMPLETED",
     );
+  });
+
+  test("same-tenant members cannot approve or authorize a pilot", () => {
+    const request = createPilotRequest({
+      organizationId: "org-a",
+      requestedBy: "member-a",
+    });
+    expect(() =>
+      transitionPilotRequest(request, "APPROVED", actor("MEMBER")),
+    ).toThrow("role_denied");
+    expect(() =>
+      transitionPilotRequest(request, "SECURITY_REVIEW", actor("MEMBER")),
+    ).toThrow("role_denied");
   });
 });

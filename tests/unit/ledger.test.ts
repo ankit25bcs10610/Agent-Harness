@@ -57,4 +57,10 @@ test("financial ledger rejects unverified or unsafe money input", async () => {
   await expect(
     ledger.append({ ...financialEvent("bad"), amountMinor: 0.5 }),
   ).rejects.toThrow();
+  await expect(
+    ledger.append({
+      ...financialEvent("unsafe"),
+      amountMinor: Number.MAX_SAFE_INTEGER + 1,
+    }),
+  ).rejects.toThrow("safe integer");
 });

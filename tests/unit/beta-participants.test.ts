@@ -49,6 +49,7 @@ describe("beta participant lifecycle", () => {
       join(directory, "beta-participants.json"),
     ).text();
     expect(stored).not.toContain(issued.token);
+    expect(stored).not.toContain(participant.accessToken);
     expect(stored).not.toContain("developer@example.com");
   });
 
@@ -141,9 +142,21 @@ describe("beta participant lifecycle", () => {
       ),
     ).rejects.toThrow("already enrolled");
     await expect(
-      getBetaParticipant(directory, participant.id, "other-program"),
-    ).rejects.toThrow("not found");
-    const withdrawn = await withdrawBetaConsent(directory, participant.id, at);
+      getBetaParticipant(directory, participant.id, "pilot-a", "wrong-token"),
+    ).rejects.toThrow("authorization");
+    const authorized = await getBetaParticipant(
+      directory,
+      participant.id,
+      "pilot-a",
+      participant.accessToken,
+    );
+    expect(authorized.id).toBe(participant.id);
+    const withdrawn = await withdrawBetaConsent(
+      directory,
+      participant.id,
+      participant.accessToken,
+      at,
+    );
     expect(withdrawn.consent.withdrawnAt).toBe(at.toISOString());
   });
 });

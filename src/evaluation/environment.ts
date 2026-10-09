@@ -1,6 +1,7 @@
-import { platform, release } from "node:os";
+import { platform, release, tmpdir } from "node:os";
+import { mkdtemp, rm } from "node:fs/promises";
 import { WorkspaceManager } from "../workspace/manager";
-import { discoverRepository } from "../workspace/git";
+import { discoverRepository, runGit } from "../workspace/git";
 import { ProcessExecutor } from "../process/executor";
 import { join } from "node:path";
 import type { EvaluationTask } from "./types";
@@ -10,6 +11,7 @@ export type EvaluationEnvironment = {
   workspaceId?: string;
   baseCommit?: string;
   metadata: Record<string, string>;
+  cleanup?: () => Promise<void>;
 };
 
 export class EvaluationEnvironmentManager {
@@ -45,32 +47,48 @@ export class EvaluationEnvironmentManager {
         },
       };
     }
+    // Keep disposable evaluation worktrees outside the fixture. This prevents
+    // the evaluated agent from seeing or modifying fixture-local evaluation
+    // metadata and avoids treating that metadata as task output.
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "chiku-evaluation-"));
     const manager = new WorkspaceManager({
       repositoryRoot: task.repositoryFixture,
-      workspaceDirectory: join(
-        task.repositoryFixture,
-        ".chiku",
-        "evaluation-workspaces",
-      ),
+      workspaceDirectory: join(temporaryRoot, "workspaces"),
     });
-    const workspace = await manager.create({
-      taskId: `evaluation-${evaluationId}`,
-      sessionId: `evaluation-${evaluationId}`,
-      ...(task.baseCommit ? { base: task.baseCommit } : {}),
-    });
-    for (const command of task.setupRequirements) {
-      const result = await this.process.run(
-        {
-          command,
-          cwd: workspace.worktreePath,
-          workspaceRoot: workspace.worktreePath,
-          timeoutMs: task.timeoutMs,
-          maxOutputChars: 20_000,
-        },
-        signal,
-      );
-      if (result.failure || result.exitCode !== 0)
-        throw new Error(`evaluation setup failed: ${command}`);
+    let workspace: Awaited<ReturnType<WorkspaceManager["create"]>> | undefined;
+    const cleanup = async () => {
+      if (workspace)
+        await runGit(task.repositoryFixture, [
+          "worktree",
+          "remove",
+          "--force",
+          workspace.worktreePath,
+        ]).catch(() => undefined);
+      await rm(temporaryRoot, { recursive: true, force: true });
+    };
+    try {
+      workspace = await manager.create({
+        taskId: `evaluation-${evaluationId}`,
+        sessionId: `evaluation-${evaluationId}`,
+        ...(task.baseCommit ? { base: task.baseCommit } : {}),
+      });
+      for (const command of task.setupRequirements) {
+        const result = await this.process.run(
+          {
+            command,
+            cwd: workspace.worktreePath,
+            workspaceRoot: workspace.worktreePath,
+            timeoutMs: task.timeoutMs,
+            maxOutputChars: 20_000,
+          },
+          signal,
+        );
+        if (result.failure || result.exitCode !== 0)
+          throw new Error(`evaluation setup failed: ${command}`);
+      }
+    } catch (error) {
+      await cleanup();
+      throw error;
     }
     return {
       root: workspace.worktreePath,
@@ -81,6 +99,7 @@ export class EvaluationEnvironmentManager {
         runtime: release(),
         git: workspace.currentHead ?? "unknown",
       },
+      cleanup,
     };
   }
 }

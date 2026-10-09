@@ -5,6 +5,19 @@ import {
   type PilotRequest,
   type PilotRequestStatus,
 } from "./types";
+import {
+  authorizeTeamAction,
+  type TeamAction,
+  type TeamMembership,
+} from "../team/authz";
+
+export type PilotActor = { membership: TeamMembership };
+
+function actionForTransition(next: PilotRequestStatus): TeamAction {
+  if (next === "SECURITY_REVIEW") return "policy:manage";
+  if (next === "APPROVED") return "tasks:approve";
+  return "tasks:write";
+}
 
 const transitions: Record<PilotRequestStatus, readonly PilotRequestStatus[]> = {
   REQUESTED: ["QUALIFICATION", "REJECTED"],
@@ -43,12 +56,17 @@ export function createPilotRequest(
 export function transitionPilotRequest(
   request: PilotRequest,
   next: PilotRequestStatus,
-  actorOrganizationId: string,
+  actor: PilotActor,
 ): PilotRequest {
   const current = PilotRequestSchema.parse(request);
   const target = PilotRequestStatusSchema.parse(next);
-  if (current.organizationId !== actorOrganizationId)
-    throw new Error("pilot request belongs to another organization");
+  const decision = authorizeTeamAction({
+    membership: actor.membership,
+    requestedOrganizationId: current.organizationId,
+    action: actionForTransition(target),
+  });
+  if (!decision.allowed)
+    throw new Error(`pilot request transition denied: ${decision.reason}`);
   if (!transitions[current.status].includes(target))
     throw new Error(
       `invalid pilot request transition: ${current.status} -> ${target}`,

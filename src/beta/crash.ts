@@ -11,15 +11,25 @@ import { join } from "node:path";
 import { homedir, platform, release } from "node:os";
 import { randomUUID } from "node:crypto";
 import { redactProviderSecrets } from "../provider/errors";
+import { z } from "zod";
 
-export type CrashReport = {
-  version: 1;
-  id: string;
-  occurredAt: string;
-  event: "uncaught_exception" | "unhandled_rejection";
-  error: { name: string; message: string; stack?: string };
-  runtime: { platform: string; release: string; bun?: string };
-};
+export const CrashReportSchema = z.object({
+  version: z.literal(1),
+  id: z.string().uuid(),
+  occurredAt: z.string().datetime({ offset: true }),
+  event: z.enum(["uncaught_exception", "unhandled_rejection"]),
+  error: z.object({
+    name: z.string().min(1),
+    message: z.string().min(1),
+    stack: z.string().optional(),
+  }),
+  runtime: z.object({
+    platform: z.string().min(1),
+    release: z.string().min(1),
+    bun: z.string().optional(),
+  }),
+});
+export type CrashReport = z.infer<typeof CrashReportSchema>;
 
 const MAX_MESSAGE_CHARS = 2_000;
 const MAX_STACK_CHARS = 6_000;
@@ -48,7 +58,7 @@ export function createCrashReport(
   error: unknown,
   now = new Date(),
 ): CrashReport {
-  return {
+  return CrashReportSchema.parse({
     version: 1,
     id: randomUUID(),
     occurredAt: now.toISOString(),
@@ -59,7 +69,7 @@ export function createCrashReport(
       release: release(),
       ...(typeof Bun !== "undefined" ? { bun: Bun.version } : {}),
     },
-  };
+  });
 }
 
 export async function saveCrashReport(
@@ -67,10 +77,11 @@ export async function saveCrashReport(
   directory = join(homedir(), ".chiku", "crashes"),
   options: CrashStorageOptions = {},
 ) {
+  const valid = CrashReportSchema.parse(report);
   await mkdir(directory, { recursive: true });
-  const destination = join(directory, `${report.id}.json`);
+  const destination = join(directory, `${valid.id}.json`);
   const temporary = `${destination}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`, {
+  await writeFile(temporary, `${JSON.stringify(valid, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -118,7 +129,9 @@ export async function exportCrashReport(
     directory,
     reportId.endsWith(".json") ? reportId : `${reportId}.json`,
   );
-  const report = JSON.parse(await readFile(source, "utf8")) as CrashReport;
+  const report = CrashReportSchema.parse(
+    JSON.parse(await readFile(source, "utf8")),
+  );
   const redacted = redactProviderSecrets(report) as CrashReport;
   await writeFile(destination, `${JSON.stringify(redacted, null, 2)}\n`, {
     encoding: "utf8",

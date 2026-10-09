@@ -53,6 +53,23 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
     },
     input.state?.context,
   );
+  if (input.memory) {
+    const task = input.messages
+      .map((message) => message.content ?? "")
+      .join(" ");
+    const persistent = await input.memory.retrieve(input.memory.scope, task);
+    for (const memory of persistent) {
+      const kind =
+        memory.kind === "repair"
+          ? "edit"
+          : memory.kind === "failure"
+            ? "error"
+            : memory.kind === "workflow" || memory.kind === "preference"
+              ? "decision"
+              : "decision";
+      contextManager.addMemory(kind, memory.summary);
+    }
+  }
 
   const emit = (event: AgentEvent) => input.events?.onEvent?.(event);
   const setLifecycle = (state: LifecycleState) => {

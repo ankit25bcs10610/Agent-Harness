@@ -16,6 +16,16 @@ export type GitHubClientOptions = {
   fetch?: GitHubFetch;
   apiBaseUrl?: string;
   signal?: AbortSignal;
+  authorizeMutation?: (
+    request: GitHubMutationRequest,
+  ) => boolean | Promise<boolean>;
+};
+
+export type GitHubMutationRequest = {
+  operation: "create_pull_request";
+  repository: GitHubRepository;
+  payload: PullRequestInput;
+  idempotencyKey?: string;
 };
 
 export type PullRequestInput = {

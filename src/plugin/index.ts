@@ -1,3 +1,4 @@
 export * from "./manifest";
 export * from "./manager";
 export * from "./sdk";
+export * from "./registry";

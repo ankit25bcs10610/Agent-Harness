@@ -50,6 +50,7 @@ export function createLoopEvaluationAdapter(
         ? { workspaceId: environment.workspaceId }
         : {}),
       execution: output.execution,
+      iterations: output.iterations,
       changedFiles,
       ...(output.stopReason === "stop"
         ? {}

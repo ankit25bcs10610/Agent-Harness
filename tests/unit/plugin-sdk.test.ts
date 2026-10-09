@@ -33,7 +33,7 @@ test("extension SDK exposes a versioned typed adapter to the existing tool contr
     { packageName: "zod" },
     new AbortController().signal,
     {
-      reportProgress: (value) => progress.push(value.stage),
+      reportProgress: (value: { stage: string }) => progress.push(value.stage),
     } as unknown as ToolContext,
   );
   expect(result).toEqual({ packageName: "zod" });

@@ -52,3 +52,24 @@ test("unverified billing signals are rejected", async () => {
     seats: 0,
   });
 });
+
+test("older verified provider events cannot overwrite newer subscription state", async () => {
+  const store = new LocalSubscriptionStore(
+    await mkdtemp(join(tmpdir(), "chiku-billing-")),
+    "tenant-a",
+  );
+  await store.applyVerifiedEvent({
+    ...event("tenant-a", "evt-new"),
+    subscription: { ...event().subscription, status: "active" },
+    providerOccurredAt: "2026-10-09T02:00:00.000Z",
+    receivedAt: "2026-10-09T02:01:00.000Z",
+  });
+  const result = await store.applyVerifiedEvent({
+    ...event("tenant-a", "evt-old"),
+    subscription: { ...event().subscription, status: "canceled" },
+    providerOccurredAt: "2026-10-09T01:00:00.000Z",
+    receivedAt: "2026-10-09T03:00:00.000Z",
+  });
+  expect(result).toMatchObject({ applied: false, reason: "out_of_order" });
+  expect((await store.subscription())?.status).toBe("active");
+});

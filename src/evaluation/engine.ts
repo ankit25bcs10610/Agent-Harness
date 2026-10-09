@@ -33,6 +33,7 @@ export type EvaluationExecution = {
   agentId?: string;
   workspaceId?: string;
   execution?: LoopOutput["execution"];
+  iterations?: number;
   changedFiles?: string[];
   artifacts?: string[];
   runtimeFailure?: string;
@@ -64,6 +65,13 @@ export class EvaluationEngine {
     return this.benchmarks.register(value);
   }
 
+  private trustedGraderRevision(task: EvaluationTask) {
+    return (
+      this.benchmarks.list().find((suite) => suite.id === task.benchmarkId)
+        ?.trustedGraderRevision ?? "application-controlled"
+    );
+  }
+
   async evaluateTask(
     task: EvaluationTask,
     adapter: EvaluationAdapter,
@@ -73,6 +81,7 @@ export class EvaluationEngine {
     const runId = randomUUID();
     const startedAt = new Date().toISOString();
     const trace = new TraceCollector(evaluationId, runId);
+    const trustedGraderRevision = this.trustedGraderRevision(task);
     trace.record({
       taskId: task.taskId,
       type: "EVALUATION_STARTED",
@@ -83,15 +92,45 @@ export class EvaluationEngine {
     let grades: Awaited<
       ReturnType<ReturnType<GraderRegistry["get"]>["grade"]>
     >[] = [];
+    const deadline = new AbortController();
+    const abortFromCaller = () => deadline.abort();
+    signal.addEventListener("abort", abortFromCaller, { once: true });
+    const timer = setTimeout(() => deadline.abort(), task.timeoutMs);
     try {
-      environment = await this.environments.prepare(task, evaluationId, signal);
+      environment = await this.environments.prepare(
+        task,
+        evaluationId,
+        deadline.signal,
+      );
       trace.record({
         taskId: task.taskId,
         workspaceId: environment.workspaceId,
         type: "WORKSPACE_PREPARED",
         data: { root: environment.root },
       });
-      execution = await adapter(task, environment, trace, signal);
+      execution = await adapter(task, environment, trace, deadline.signal);
+      if (deadline.signal.aborted)
+        throw new Error("evaluation timed out before grading");
+      const budgetExceeded = [
+        ...(execution.iterations !== undefined &&
+        execution.iterations > task.budget.maxIterations
+          ? (["iterations"] as const)
+          : []),
+        ...(execution.execution &&
+        execution.execution.tokensUsed > task.budget.maxTokens
+          ? (["tokens"] as const)
+          : []),
+        ...(execution.execution &&
+        execution.execution.toolCalls > task.budget.maxToolCalls
+          ? (["tool_calls"] as const)
+          : []),
+      ];
+      if (budgetExceeded.length)
+        trace.record({
+          taskId: task.taskId,
+          type: "BUDGET_EXCEEDED",
+          data: { budgets: budgetExceeded },
+        });
       const changedFiles = execution.changedFiles ?? [];
       trace.record({
         taskId: task.taskId,
@@ -105,9 +144,9 @@ export class EvaluationEngine {
         task,
         root: environment.root,
         changedFiles,
-        trustedGraderRevision: "application-controlled",
+        trustedGraderRevision,
         process: new ProcessExecutor(),
-        signal,
+        signal: deadline.signal,
         ...(execution.runtimeFailure
           ? { runtimeFailure: execution.runtimeFailure }
           : {}),
@@ -132,8 +171,9 @@ export class EvaluationEngine {
         task,
         root: environment.root,
         changedFiles,
-        trustedGraderRevision: "application-controlled",
+        trustedGraderRevision,
       });
+      integrity.budgetExceeded = [...budgetExceeded];
       const finishedAt = new Date().toISOString();
       const metrics = aggregateMetrics({
         grades,
@@ -148,7 +188,8 @@ export class EvaluationEngine {
         taskId: task.taskId,
         status:
           integrity.graderTampered ||
-          integrity.changedOutsideAllowedPaths.length
+          integrity.changedOutsideAllowedPaths.length ||
+          budgetExceeded.length
             ? "FAIL"
             : outcomeFromGrades(grades),
         startedAt,
@@ -176,10 +217,11 @@ export class EvaluationEngine {
         evaluationId,
         runId,
         taskId: task.taskId,
-        status: signal.aborted
+        status: deadline.signal.aborted
           ? "TIMEOUT"
           : error instanceof Error &&
-              error.message.startsWith("evaluation blocked:")
+              (error.message.startsWith("evaluation blocked:") ||
+                error.message.startsWith("fixture base commit mismatch:"))
             ? "BLOCKED"
             : "ERROR",
         startedAt,
@@ -197,16 +239,20 @@ export class EvaluationEngine {
         trace: trace.list(),
         artifacts: execution.artifacts ?? [],
         integrity: {
-          trustedGraderRevision: "application-controlled",
+          trustedGraderRevision,
           changedOutsideAllowedPaths: [],
           graderTampered: false,
           fixtureContaminated: false,
+          budgetExceeded: [],
         },
         error: error instanceof Error ? error.message : String(error),
       });
       await saveEvaluationResult(result, this.resultsDirectory);
       this.results.set(result.evaluationId, result);
       return result;
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abortFromCaller);
     }
   }
 

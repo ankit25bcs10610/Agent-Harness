@@ -1,6 +1,7 @@
 import type { z, ZodRawShape } from "zod";
 import type { Asker, PermissionKey, PermSession } from "../permission/types";
 import type { WorkspaceExecutionContext } from "../workspace/types";
+import type { GovernanceBroker } from "../governance";
 
 export type Tool<
   TParams extends ZodRawShape = ZodRawShape,
@@ -38,4 +39,8 @@ export type ToolContext = {
     completed?: number;
     total?: number;
   }) => void;
+  /** Optional fail-closed governance boundary evaluated before permissions. */
+  governance?: GovernanceBroker;
+  /** Exact governance approval token for a previously reviewed operation. */
+  governanceApprovalId?: string;
 };

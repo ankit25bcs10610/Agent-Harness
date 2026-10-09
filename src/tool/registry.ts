@@ -12,6 +12,7 @@ import { searchSymbols } from "./tools/search_symbols";
 import { applyPatchTool } from "./tools/apply_patch";
 import { truncateStrings } from "./truncate_tool";
 import type { Tool, ToolContext } from "./types";
+import { newGovernanceAction } from "../governance";
 import z from "zod";
 import {
   repoOverview,
@@ -110,6 +111,32 @@ export async function runTool(
         : undefined;
     if (contractId !== ctx.requiredContractId)
       return `Not allowed to run tool: ${name}, reason: required change contract ${ctx.requiredContractId} is not bound to this task`;
+  }
+
+  if (ctx.governance) {
+    const keys =
+      tool.getPermissionKeys?.(parsedArgs.data) ??
+      (tool.getPermissionKey(parsedArgs.data)
+        ? [tool.getPermissionKey(parsedArgs.data)!]
+        : []);
+    for (const key of keys) {
+      const action = newGovernanceAction({
+        operation: name,
+        capability: key.capability,
+        target: key.target,
+        tenantId: ctx.governance.identity.tenantId,
+        workspaceId: ctx.governance.identity.workspaceId,
+        risk: key.risk,
+        consequence: key.explanation,
+      });
+      const decision = ctx.governance.authorize(action);
+      const approved =
+        decision === "REQUIRES_APPROVAL" &&
+        !!ctx.governanceApprovalId &&
+        ctx.governance.authorizeWithApproval(action, ctx.governanceApprovalId);
+      if (decision !== "ALLOW" && !approved)
+        return `Not allowed to run tool: ${name}, reason: governance decision ${decision}`;
+    }
   }
 
   const allowedToRun: Allowed = await checkPermission(

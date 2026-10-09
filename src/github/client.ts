@@ -5,6 +5,7 @@ import {
   type GitHubRepository,
   type PullRequest,
   type PullRequestInput,
+  type GitHubMutationRequest,
 } from "./types";
 
 function repositoryFromRemote(remote: string): GitHubRepository {
@@ -35,6 +36,8 @@ export class GitHubClient {
   private readonly fetcher: NonNullable<GitHubClientOptions["fetch"]>;
   private readonly baseUrl: string;
   private readonly signal: AbortSignal | undefined;
+  private readonly authorizeMutation: GitHubClientOptions["authorizeMutation"];
+  private readonly mutationResults = new Map<string, PullRequest>();
 
   constructor(private readonly options: GitHubClientOptions) {
     if (!options.token.trim()) throw new Error("GitHub token is required");
@@ -44,6 +47,7 @@ export class GitHubClient {
       "",
     );
     this.signal = options.signal;
+    this.authorizeMutation = options.authorizeMutation;
   }
 
   private async request(path: string, init: RequestInit = {}) {
@@ -95,7 +99,24 @@ export class GitHubClient {
   async createPullRequest(
     repository: GitHubRepository,
     input: PullRequestInput,
+    options: { idempotencyKey?: string } = {},
   ): Promise<PullRequest> {
+    const request: GitHubMutationRequest = {
+      operation: "create_pull_request",
+      repository,
+      payload: input,
+      ...(options.idempotencyKey
+        ? { idempotencyKey: options.idempotencyKey }
+        : {}),
+    };
+    if (!this.authorizeMutation)
+      throw new Error("GitHub mutation requires explicit authorization");
+    if (!(await this.authorizeMutation(request)))
+      throw new Error("GitHub mutation was not authorized");
+    if (options.idempotencyKey) {
+      const previous = this.mutationResults.get(options.idempotencyKey);
+      if (previous) return previous;
+    }
     const data = jsonObject(
       await (
         await this.request(
@@ -108,7 +129,7 @@ export class GitHubClient {
         )
       ).json(),
     );
-    return {
+    const result = {
       number: Number(data.number),
       url: String(data.url),
       htmlUrl: String(data.html_url),
@@ -116,6 +137,9 @@ export class GitHubClient {
       head: String(jsonObject(data.head).ref),
       base: String(jsonObject(data.base).ref),
     };
+    if (options.idempotencyKey)
+      this.mutationResults.set(options.idempotencyKey, result);
+    return result;
   }
 
   async checks(

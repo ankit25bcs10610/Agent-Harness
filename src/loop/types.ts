@@ -13,6 +13,7 @@ import type {
 } from "../workflow/types";
 import type { SkillLifecycle } from "../skill/lifecycle";
 import type { PerformanceInstrumentation } from "../performance";
+import type { MemoryRetrieval, MemoryScope } from "../memory";
 
 // dependency injecting interfaces for loop
 
@@ -67,6 +68,8 @@ export interface LoopInput {
   workflow?: WorkflowController;
   skills?: SkillLifecycle;
   performance?: PerformanceInstrumentation;
+  /** Optional, explicitly scoped persistent memory. It is read-only to the loop. */
+  memory?: MemoryRetrieval & { scope: MemoryScope };
 }
 
 export type StopReason =

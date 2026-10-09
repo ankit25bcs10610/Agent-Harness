@@ -33,5 +33,8 @@ export async function checkBenchmarkIntegrity(input: {
     changedOutsideAllowedPaths: outside,
     graderTampered,
     fixtureContaminated,
+    budgetExceeded: [] as Array<
+      "iterations" | "tokens" | "wall_clock" | "tool_calls" | "cost"
+    >,
   };
 }

@@ -263,10 +263,57 @@ test("trace collector keeps bounded redacted evidence", () => {
   const event = trace.record({
     taskId: "task",
     type: "MODEL_REQUEST",
-    data: { authorization: "secret", value: "ok" },
+    data: {
+      authorization: "secret",
+      value: "ok",
+      message: "Bearer abcdefghijklmnop",
+    },
   });
   expect(event.data.authorization).toBe("[REDACTED]");
-  expect(trace.list()).toHaveLength(1);
+  expect(event.data.message).toBe("[REDACTED]");
+  for (let index = 0; index < 2_100; index++)
+    trace.record({ taskId: "task", type: "STEP", data: { index } });
+  expect(trace.list()).toHaveLength(2_000);
+});
+
+test("pinned fixtures fail closed when their HEAD cannot be verified", async () => {
+  await fixture();
+  const head = await new Response(
+    Bun.spawn(["git", "-C", root, "rev-parse", "HEAD"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    }).stdout,
+  ).text();
+  const result = await new EvaluationEngine().evaluateTask(
+    task({ baseCommit: `${head.trim()}-not-real` }),
+    async () => ({ changedFiles: [] }),
+  );
+  expect(result.status).toBe("BLOCKED");
+  expect(result.error).toContain("fixture base commit mismatch");
+});
+
+test("evaluation fails when the real adapter exceeds declared budgets", async () => {
+  await fixture();
+  const result = await new EvaluationEngine().evaluateTask(
+    task({ budget: { ...task().budget, maxToolCalls: 0 } }),
+    async () => ({
+      changedFiles: [],
+      iterations: 3,
+      execution: {
+        startedAt: Date.now(),
+        durationMs: 1,
+        modelRequests: 1,
+        toolCalls: 1,
+        tokensUsed: 1,
+        usageIncomplete: false,
+      },
+    }),
+  );
+  expect(result.status).toBe("FAIL");
+  expect(result.integrity.budgetExceeded).toEqual(["iterations", "tool_calls"]);
+  expect(result.trace.some((event) => event.type === "BUDGET_EXCEEDED")).toBe(
+    true,
+  );
 });
 
 test("evaluation blocks tasks that require unavailable isolation", async () => {

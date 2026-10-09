@@ -30,13 +30,9 @@ export class EvaluationEnvironmentManager {
     const repository = await discoverRepository(task.repositoryFixture);
     if (!repository.isRepository)
       throw new Error("evaluation fixture is not a Git repository");
-    if (
-      task.baseCommit &&
-      repository.head &&
-      task.baseCommit !== repository.head
-    )
+    if (task.baseCommit && task.baseCommit !== repository.head)
       throw new Error(
-        `fixture base commit mismatch: expected ${task.baseCommit}, got ${repository.head}`,
+        `fixture base commit mismatch: expected ${task.baseCommit}, got ${repository.head ?? "unknown"}`,
       );
     if (task.allowedWorkspaces === "none") {
       return {

@@ -39,6 +39,7 @@ test("GitHub client prepares a pull request and aggregates check failures", asyn
   const client = new GitHubClient({
     token: "token",
     apiBaseUrl: "https://github.test",
+    authorizeMutation: () => true,
     fetch: async (input, init) => {
       const url = String(input);
       calls.push(`${init?.method ?? "GET"} ${url}`);
@@ -68,12 +69,16 @@ test("GitHub client prepares a pull request and aggregates check failures", asyn
   const repo = { owner: "o", name: "r" };
   expect(
     (
-      await client.createPullRequest(repo, {
-        title: "Update",
-        body: "body",
-        head: "feature",
-        base: "main",
-      })
+      await client.createPullRequest(
+        repo,
+        {
+          title: "Update",
+          body: "body",
+          head: "feature",
+          base: "main",
+        },
+        { idempotencyKey: "create-pr-7" },
+      )
     ).number,
   ).toBe(7);
   const readiness = await client.mergeReadiness(repo, 7);
@@ -81,6 +86,53 @@ test("GitHub client prepares a pull request and aggregates check failures", asyn
   expect(readiness.checks.failed).toBe(1);
   expect(readiness.checks.pending).toBe(1);
   expect(calls.some((call) => call.startsWith("POST"))).toBe(true);
+});
+
+test("GitHub mutations fail closed and authorized retries are idempotent", async () => {
+  let postCount = 0;
+  const repository = { owner: "o", name: "r" };
+  const payload = {
+    title: "Update",
+    body: "body",
+    head: "feature",
+    base: "main",
+  };
+  const denied = new GitHubClient({
+    token: "token",
+    fetch: async () => {
+      postCount++;
+      return response({});
+    },
+  });
+  await expect(denied.createPullRequest(repository, payload)).rejects.toThrow(
+    "requires explicit authorization",
+  );
+  expect(postCount).toBe(0);
+
+  const approved = new GitHubClient({
+    token: "token",
+    authorizeMutation: (request) =>
+      request.repository.owner === "o" && request.payload.head === "feature",
+    fetch: async () => {
+      postCount++;
+      return response({
+        number: 8,
+        url: "api/pr/8",
+        html_url: "https://github.test/pr/8",
+        state: "open",
+        head: { ref: "feature" },
+        base: { ref: "main" },
+      });
+    },
+  });
+  const first = await approved.createPullRequest(repository, payload, {
+    idempotencyKey: "create-pr-8",
+  });
+  const second = await approved.createPullRequest(repository, payload, {
+    idempotencyKey: "create-pr-8",
+  });
+  expect(second).toEqual(first);
+  expect(postCount).toBe(1);
 });
 
 test("GitHub client parses remotes and fails closed on API errors", async () => {

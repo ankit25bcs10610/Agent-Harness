@@ -34,6 +34,7 @@ export const PATHS = {
   sessionsDir: `${CHIKU_DIR}/sessions`,
   contractsDir: `${CHIKU_DIR}/contracts`,
   tasksDir: `${CHIKU_DIR}/tasks`,
+  memoryDir: `${CHIKU_DIR}/memory`,
   workspacesDir: `${CHIKU_DIR}/workspaces`,
   workspaceLocksDir: `${CHIKU_DIR}/locks`,
 };

@@ -29,7 +29,10 @@ export const AnalyticsEventSchema = z.object({
     z.union([z.string(), z.number(), z.boolean()]),
   ),
 });
-export type AnalyticsEvent = z.infer<typeof AnalyticsEventSchema>;
+export type AnalyticsEvent = Omit<
+  z.infer<typeof AnalyticsEventSchema>,
+  "origin"
+> & { origin?: "product" | "synthetic" };
 
 export const AnalyticsConsentSchema = z.object({
   schemaVersion: z.literal(1),

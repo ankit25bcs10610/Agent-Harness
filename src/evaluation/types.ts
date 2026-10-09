@@ -152,6 +152,11 @@ export const EvaluationResultSchema = z.object({
     changedOutsideAllowedPaths: z.array(z.string()),
     graderTampered: z.boolean(),
     fixtureContaminated: z.boolean(),
+    budgetExceeded: z
+      .array(
+        z.enum(["iterations", "tokens", "wall_clock", "tool_calls", "cost"]),
+      )
+      .optional(),
   }),
   error: z.string().optional(),
 });

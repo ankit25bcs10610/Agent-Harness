@@ -3,6 +3,10 @@ import { runLoop } from "../../src/loop/loop";
 import type { ProviderResponse } from "../../src/provider/types";
 import type { PermissionGrant } from "../../src/permission/types";
 import { PerformanceInstrumentation } from "../../src/performance";
+import { LocalMemoryStore } from "../../src/memory";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 
 const config = (overrides = {}) => ({
   maxIterations: 3,
@@ -224,5 +228,38 @@ describe("agent loop", () => {
       "model.request",
     ]);
     expect(performance.list()[0]?.status).toBe("ok");
+  });
+
+  test("injects only verified scoped persistent memory into the loop context", async () => {
+    const store = await new LocalMemoryStore(
+      join(tmpdir(), `chiku-loop-memory-${randomUUID()}`),
+      { enabled: true, maxRecords: 10, maxAgeMs: 1_000_000, maxRetrieved: 5 },
+    ).load();
+    await store.add({
+      scope: { kind: "workspace", id: "workspace-a" },
+      kind: "workflow",
+      summary: "Run Bun tests before review",
+      status: "verified",
+      evidence: [{ kind: "verification", reference: "ci-1", outcome: "pass" }],
+    });
+    const result = await runLoop({
+      messages: [{ type: "user", content: "review Bun tests" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async (messages) => {
+        expect(
+          messages.some((message) =>
+            message.content?.includes("Run Bun tests before review"),
+          ),
+        ).toBe(true);
+        return response();
+      },
+      config: config(),
+      ctx,
+      memory: {
+        scope: { kind: "workspace", id: "workspace-a" },
+        retrieve: store.retrieve.bind(store),
+      },
+    });
+    expect(result.stopReason).toBe("stop");
   });
 });

@@ -37,6 +37,7 @@ export const VerifiedBillingEventSchema = z.object({
   verified: z.literal(true),
   subscription: SubscriptionSchema.omit({ updatedAt: true }),
   receivedAt: z.string().datetime({ offset: true }),
+  providerOccurredAt: z.string().datetime({ offset: true }).optional(),
 });
 export type VerifiedBillingEvent = z.infer<typeof VerifiedBillingEventSchema>;
 
@@ -96,7 +97,20 @@ export class LocalSubscriptionStore {
       VerifiedBillingEventSchema,
     );
     if (events.some((item) => item.eventId === event.eventId))
-      return { applied: false, subscription: await this.subscription() };
+      return {
+        applied: false,
+        reason: "duplicate" as const,
+        subscription: await this.subscription(),
+      };
+    const current = await this.subscription();
+    const incomingAt = Date.parse(event.providerOccurredAt ?? event.receivedAt);
+    const currentAt = current ? Date.parse(current.updatedAt) : -Infinity;
+    if (current && incomingAt < currentAt)
+      return {
+        applied: false,
+        reason: "out_of_order" as const,
+        subscription: current,
+      };
     const subscription = SubscriptionSchema.parse({
       ...event.subscription,
       updatedAt: event.receivedAt,
@@ -112,7 +126,7 @@ export class LocalSubscriptionStore {
       .concat(subscription);
     await atomicWrite(subscriptionsFile(this.directory), allSubscriptions);
     await atomicWrite(eventsFile(this.directory), events.concat(event));
-    return { applied: true, subscription };
+    return { applied: true, reason: "applied" as const, subscription };
   }
 
   async entitlement(): Promise<Entitlement> {

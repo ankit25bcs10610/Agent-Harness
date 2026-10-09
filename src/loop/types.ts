@@ -12,6 +12,7 @@ import type {
   WorkflowPolicy,
 } from "../workflow/types";
 import type { SkillLifecycle } from "../skill/lifecycle";
+import type { PerformanceInstrumentation } from "../performance";
 
 // dependency injecting interfaces for loop
 
@@ -65,6 +66,7 @@ export interface LoopInput {
   state?: LoopState | undefined;
   workflow?: WorkflowController;
   skills?: SkillLifecycle;
+  performance?: PerformanceInstrumentation;
 }
 
 export type StopReason =

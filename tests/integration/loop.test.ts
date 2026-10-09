@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { runLoop } from "../../src/loop/loop";
 import type { ProviderResponse } from "../../src/provider/types";
 import type { PermissionGrant } from "../../src/permission/types";
+import { PerformanceInstrumentation } from "../../src/performance";
 
 const config = (overrides = {}) => ({
   maxIterations: 3,
@@ -202,5 +203,26 @@ describe("agent loop", () => {
     expect(
       result.messages.filter((message) => message.type === "tool"),
     ).toHaveLength(0);
+  });
+
+  test("records real model and tool spans without changing loop results", async () => {
+    let now = 100;
+    const performance = new PerformanceInstrumentation(() => now);
+    const result = await runLoop({
+      messages: [{ type: "user", content: "measure" }],
+      systemPrompt: { type: "system", content: "test" },
+      complete: async () => {
+        now += 4;
+        return response("stop");
+      },
+      config: config(),
+      ctx,
+      performance,
+    });
+    expect(result.stopReason).toBe("stop");
+    expect(performance.list().map((span) => span.name)).toEqual([
+      "model.request",
+    ]);
+    expect(performance.list()[0]?.status).toBe("ok");
   });
 });

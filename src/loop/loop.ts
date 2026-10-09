@@ -179,6 +179,10 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
         at: Date.now(),
       });
       let completion;
+      const modelSpan = input.performance?.start("model.request", {
+        model: cfg.loopModel,
+        attempt: modelRequests,
+      });
       try {
         completion = await input.complete(
           [input.systemPrompt, ...lastMessageView],
@@ -188,6 +192,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
           input.events,
         );
       } catch (error) {
+        modelSpan?.end(ctx.signal.aborted ? "cancelled" : "error");
         if (ctx.signal.aborted) return finish("interrupted");
         const code =
           typeof error === "object" && error && "code" in error
@@ -199,6 +204,7 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
             : "provider_failure",
         );
       }
+      modelSpan?.end("ok", { totalTokens: completion.stats.totalTokens });
       tokensUsed += completion.stats.totalTokens;
       lastPromptTokens = completion.stats.promptTokens;
       usageIncomplete ||= completion.stats.usageComplete === false;
@@ -221,7 +227,17 @@ export async function runLoop(input: LoopInput): Promise<LoopOutput> {
           input.workflow?.recordToolCall(call);
         }
         setLifecycle("execution");
-        const results = await dispatchTool(calls, ctx, dispatchEvents);
+        const toolSpan = input.performance?.start("tool.dispatch", {
+          toolCount: calls.length,
+        });
+        let results;
+        try {
+          results = await dispatchTool(calls, ctx, dispatchEvents);
+          toolSpan?.end("ok", { resultCount: results.length });
+        } catch (error) {
+          toolSpan?.end(ctx.signal.aborted ? "cancelled" : "error");
+          throw error;
+        }
         setLifecycle("verification");
         for (const result of results) {
           messages.push(result);

@@ -7,6 +7,7 @@ export const McpServerConfigSchema = z.object({
   args: z.array(z.string()).max(50).default([]),
   cwd: z.string().min(1).optional(),
   url: z.string().url().optional(),
+  allowedHosts: z.array(z.string().min(1)).max(50).default([]),
   environment: z.record(z.string(), z.string()).default({}),
   authEnvironmentVariable: z
     .string()

@@ -16,6 +16,26 @@ type Connected = {
   transport: StdioClientTransport | StreamableHTTPClientTransport;
 };
 
+function validateHttpEndpoint(config: McpServerConfig): URL {
+  const endpoint = new URL(config.url!);
+  if (endpoint.protocol !== "https:")
+    throw new Error("MCP HTTP transport requires HTTPS");
+  if (endpoint.username || endpoint.password)
+    throw new Error("MCP HTTP URL must not contain credentials");
+  if (!config.allowedHosts.includes(endpoint.hostname))
+    throw new Error(`MCP host is not allowlisted: ${endpoint.hostname}`);
+  return endpoint;
+}
+
+function boundExternalResult(value: unknown, maxChars: number): unknown {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined || serialized.length <= maxChars) return value;
+  return {
+    truncated: true,
+    output: serialized.slice(0, maxChars),
+  };
+}
+
 function classify(name: string, description: string) {
   const text = `${name} ${description}`.toLowerCase();
   if (
@@ -155,6 +175,10 @@ export class McpClientConnection {
       throw new Error("stdio MCP server requires command");
     if (config.transport === "streamable-http" && !config.url)
       throw new Error("HTTP MCP server requires URL");
+    const httpEndpoint =
+      config.transport === "streamable-http"
+        ? validateHttpEndpoint(config)
+        : undefined;
     const headers: Record<string, string> = {};
     if (config.authEnvironmentVariable) {
       const token = process.env[config.authEnvironmentVariable];
@@ -173,7 +197,7 @@ export class McpClientConnection {
             env: config.environment,
             stderr: "pipe",
           })
-        : new StreamableHTTPClientTransport(new URL(config.url!), {
+        : new StreamableHTTPClientTransport(httpEndpoint!, {
             requestInit: { headers },
           });
     const client = new Client({ name: "chiku", version: "1.0.0" });
@@ -305,10 +329,10 @@ export class McpClientConnection {
         }),
         new Promise<never>(
           (_, reject) =>
-            (timer = setTimeout(
-              () => reject(new Error("MCP tool timeout")),
-              connection.config.toolTimeoutMs,
-            )),
+            (timer = setTimeout(() => {
+              void connection.transport.close();
+              reject(new Error("MCP tool timeout"));
+            }, connection.config.toolTimeoutMs)),
         ),
       ]);
       this.audit.push({
@@ -318,7 +342,18 @@ export class McpClientConnection {
         operation: "invoke",
         outcome: "completed",
       });
-      return result;
+      return boundExternalResult(result, connection.config.maxOutputChars);
+    } catch (error) {
+      this.audit.push({
+        at: new Date().toISOString(),
+        serverId: record.serverId,
+        tool: record.name,
+        operation: "invoke",
+        outcome: "failed",
+        detail:
+          error instanceof Error ? error.message : "MCP invocation failed",
+      });
+      throw error;
     } finally {
       if (timer) clearTimeout(timer);
       signal.removeEventListener("abort", abort);

@@ -7,7 +7,7 @@ Environment: macOS development host, Bun 1.4.2, TypeScript validation, local det
 
 ## Executive summary
 
-Chiku is suitable for controlled local development against repositories the operator trusts, with human approval enabled. It is **not safe to classify as a host-isolated autonomous execution sandbox**. The default `bash` tool uses `ProcessExecutor` without an isolation request, and `IsolationRegistry` has no registered backend in this repository. Working-directory checks and environment filtering reduce risk but do not provide OS-level containment.
+Chiku is suitable for controlled local development against repositories the operator trusts, with human approval enabled. It is **not safe to classify as a universally host-isolated autonomous execution sandbox**. The macOS Seatbelt backend is registered when available and secure requests fail closed if the host rejects profile application; ordinary `bash` remains host execution unless isolation is explicitly required. Working-directory checks and environment filtering reduce risk but do not replace OS-level containment.
 
 Recommended verdict: **CONTROLLED INTERNAL PILOT**, limited to trusted repositories, interactive approval, non-sensitive host accounts, and no unattended execution. It is **NO-GO** for unattended execution against untrusted repositories and for enterprise claims requiring a real sandbox, hosted identity, or independent security validation.
 
@@ -29,10 +29,10 @@ Inspected the agent loop, process executor/isolation, permission engine, patch e
 ### CHIKU-SEC-001 — Host process execution is not an OS sandbox
 
 - Severity: **High** for untrusted repositories; confidence: high.
-- Evidence: `src/tool/tools/bash.ts` constructs `new ProcessExecutor()` without an isolation policy. `src/process/executor.ts` calls `spawn(...)` directly. `src/process/isolation.ts` documents that no backend is enabled by default and only fails closed when a caller explicitly requests isolation.
+- Evidence: `src/process/macos-sandbox.ts` prepares a macOS Seatbelt profile and `src/process/isolation.ts` registers it on macOS. `src/process/executor.ts` calls `spawn(...)` only after backend preparation, and maps rejected profile application to `isolation_unavailable`.
 - Impact: a permitted command can use the host process privileges, readable files, and network available to the user. CWD restrictions do not prevent access to unrelated readable paths or network destinations.
 - Existing mitigations: direct argument spawning by default, explicit shell mode, filtered sensitive environment keys, timeout/output limits, cancellation, workspace CWD validation, and a new `requireIsolation` fail-closed contract.
-- Required remediation: add and register an actually enforced OS/container/VM backend; the current `requireIsolation` contract now fails closed but cannot provide isolation by itself. Add runtime tests for host-file, network, privilege, and descendant-process isolation. Do not describe current behavior as sandboxing.
+- Required remediation: validate Seatbelt on a supported macOS runtime, add equivalent Linux/Windows backends, and run host-file, network, privilege, mount, and descendant-process fixtures. Do not describe ordinary host execution as sandboxing.
 
 ### CHIKU-SEC-002 — Remote MCP URL policy is incomplete
 
@@ -63,22 +63,22 @@ Inspected the agent loop, process executor/isolation, permission engine, patch e
 
 ## Security test matrix
 
-| Scenario                                      | Result                          | Evidence                                              |
-| --------------------------------------------- | ------------------------------- | ----------------------------------------------------- |
-| Path traversal / workspace escape             | PASS                            | `tests/unit/permission.test.ts`                       |
-| Symlink escape and replacement race           | PASS                            | `tests/unit/permission.test.ts`, patch tests          |
-| Sensitive direct file access                  | PASS                            | permission tests                                      |
-| Multi-file patch with forbidden target        | PASS                            | `tests/unit/patch.test.ts`                            |
-| Stale/concurrent patch and safe undo          | PASS                            | patch tests                                           |
-| Process timeout/cancellation/output bound     | PASS                            | `tests/unit/process.test.ts`                          |
-| Requested unavailable isolation               | PASS / fail-closed              | process tests                                         |
-| Actual host filesystem sandbox escape         | NOT_RUN                         | no enforceable backend is registered                  |
-| Network-disabled sandbox egress               | NOT_RUN                         | no enforceable backend is registered                  |
-| MCP stdio lifecycle and authorization         | PASS                            | `tests/integration/mcp.test.ts`                       |
-| Remote MCP SSRF defense                       | NOT_RUN                         | no authorized remote fixture supplied                 |
-| Session secret persistence                    | PASS for synthetic fixtures     | session tests                                         |
-| Multi-agent authorization/workspace isolation | PASS for deterministic fixtures | multi-agent tests                                     |
-| Dependency audit                              | BLOCKED                         | npm registry DNS resolution failed during `bun audit` |
+| Scenario                                      | Result                          | Evidence                                                            |
+| --------------------------------------------- | ------------------------------- | ------------------------------------------------------------------- |
+| Path traversal / workspace escape             | PASS                            | `tests/unit/permission.test.ts`                                     |
+| Symlink escape and replacement race           | PASS                            | `tests/unit/permission.test.ts`, patch tests                        |
+| Sensitive direct file access                  | PASS                            | permission tests                                                    |
+| Multi-file patch with forbidden target        | PASS                            | `tests/unit/patch.test.ts`                                          |
+| Stale/concurrent patch and safe undo          | PASS                            | patch tests                                                         |
+| Process timeout/cancellation/output bound     | PASS                            | `tests/unit/process.test.ts`                                        |
+| Requested unavailable isolation               | PASS / fail-closed              | process tests                                                       |
+| Actual host filesystem sandbox escape         | BLOCKED                         | host rejected Seatbelt profile application                          |
+| Network-disabled sandbox egress               | BLOCKED                         | host rejected Seatbelt profile application                          |
+| MCP stdio lifecycle and authorization         | PASS                            | `tests/integration/mcp.test.ts`                                     |
+| Remote MCP SSRF defense                       | PARTIAL                         | HTTPS and explicit host allowlist tested; live fixture not supplied |
+| Session secret persistence                    | PASS for synthetic fixtures     | session tests                                                       |
+| Multi-agent authorization/workspace isolation | PASS for deterministic fixtures | multi-agent tests                                                   |
+| Dependency audit                              | BLOCKED                         | npm registry DNS resolution failed during `bun audit`               |
 
 Executed targeted suite: **44 passed, 0 failed, 95 assertions**.  
 Executed security scan: **260 tracked files inspected, passed**.
@@ -87,20 +87,20 @@ Executed security scan: **260 tracked files inspected, passed**.
 
 Scores are engineering assessment scores, not certification:
 
-| Category                    | Score | Basis                                                                                        |
-| --------------------------- | ----: | -------------------------------------------------------------------------------------------- |
-| Sandbox isolation           |  2/10 | No registered OS-enforced backend                                                            |
-| Filesystem security         |  8/10 | Canonical paths, symlink checks, sensitive paths tested                                      |
-| Permission architecture     |  8/10 | Central registry and per-target patch authorization tested                                   |
-| Patch safety                |  8/10 | Hash/precondition/rollback protections tested                                                |
-| MCP security                |  5/10 | Stdio and capability checks tested; remote SSRF policy incomplete                            |
-| Prompt-injection resistance |  6/10 | Deterministic authorization is independent of model text; broader adversarial corpus remains |
-| Multi-agent authorization   |  7/10 | Bounded workers, workspaces, and contracts tested                                            |
-| Secret management           |  6/10 | Redaction/filtering/session exclusion tested; OS keychain and full egress policy absent      |
-| Supply chain                |  5/10 | Lockfile and CI checks exist; advisory query was unavailable                                 |
-| CI/CD security              |  6/10 | CI/security checks exist; full external workflow review not performed here                   |
-| Session privacy             |  7/10 | Atomic, bounded, schema-checked local persistence                                            |
-| Runtime resilience          |  7/10 | Budgets, cancellation, retries, and recovery tested                                          |
+| Category                    | Score | Basis                                                                                                        |
+| --------------------------- | ----: | ------------------------------------------------------------------------------------------------------------ |
+| Sandbox isolation           |  2/10 | No registered OS-enforced backend                                                                            |
+| Filesystem security         |  8/10 | Canonical paths, symlink checks, sensitive paths tested                                                      |
+| Permission architecture     |  8/10 | Central registry and per-target patch authorization tested                                                   |
+| Patch safety                |  8/10 | Hash/precondition/rollback protections tested                                                                |
+| MCP security                |  7/10 | Stdio, capability checks, HTTPS, host allowlisting, and bounded responses tested; live validation incomplete |
+| Prompt-injection resistance |  6/10 | Deterministic authorization is independent of model text; broader adversarial corpus remains                 |
+| Multi-agent authorization   |  7/10 | Bounded workers, workspaces, and contracts tested                                                            |
+| Secret management           |  6/10 | Redaction/filtering/session exclusion tested; OS keychain and full egress policy absent                      |
+| Supply chain                |  5/10 | Lockfile and CI checks exist; advisory query was unavailable                                                 |
+| CI/CD security              |  6/10 | CI/security checks exist; full external workflow review not performed here                                   |
+| Session privacy             |  7/10 | Atomic, bounded, schema-checked local persistence                                                            |
+| Runtime resilience          |  7/10 | Budgets, cancellation, retries, and recovery tested                                                          |
 
 ## Prioritized remediation
 
@@ -112,7 +112,7 @@ Scores are engineering assessment scores, not certification:
 
 ### P1
 
-1. Add remote MCP URL allowlists and SSRF/DNS-rebinding defenses.
+1. Add DNS-resolution and rebinding defenses for remote MCP endpoints, then validate them against a controlled remote fixture.
 2. Complete adversarial prompt-injection fixtures across repository, MCP, GitHub, and tool outputs.
 3. Add protected/tamper-evident audit storage for hosted deployments.
 4. Re-run dependency advisories from a network-enabled authorized CI environment.
@@ -125,7 +125,7 @@ Scores are engineering assessment scores, not certification:
 
 ## Production verdict
 
-**CONTROLLED INTERNAL PILOT** only. Local interactive use with trusted repositories and explicit approvals is supported by the executed deterministic evidence. Untrusted-repository autonomous execution, unattended host execution, enterprise sandbox guarantees, independent audit claims, and remote MCP security are not validated.
+**CONTROLLED INTERNAL PILOT** only. Local interactive use with trusted repositories and explicit approvals is supported by the executed deterministic evidence. macOS secure execution is available only where Seatbelt profile application succeeds; this environment rejected it. Untrusted-repository autonomous execution, unattended host execution, cross-platform sandbox guarantees, independent audit claims, and live remote MCP security are not validated.
 
 No certification, penetration test, customer approval, or production security approval is claimed.
 

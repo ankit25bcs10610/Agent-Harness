@@ -283,8 +283,8 @@ export class ProcessExecutor {
         if (truncated && !failure) failure = "output_limit";
         if (
           prepared.isolated &&
-          exitCode === 71 &&
-          stderr.includes("sandbox_apply")
+          (stderr.toLowerCase().includes("sandbox") ||
+            stderr.toLowerCase().includes("seatbelt"))
         ) {
           failure = "isolation_unavailable";
         } else if (exitCode !== 0 && !failure) failure = "exit";

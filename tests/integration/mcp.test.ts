@@ -18,6 +18,7 @@ test("real stdio MCP fixture initializes, discovers, validates, and invokes tool
     toolTimeoutMs: 5_000,
     maxOutputChars: 5_000,
     enabled: true,
+    allowedHosts: [],
     allowedTools: [],
   });
   connections.push(connection);
@@ -54,6 +55,7 @@ test("MCP tool input validation and capability policy fail closed", async () => 
     toolTimeoutMs: 5_000,
     maxOutputChars: 5_000,
     enabled: true,
+    allowedHosts: [],
     allowedTools: ["greet", "validate_payload"],
   });
   connections.push(connection);
@@ -134,6 +136,7 @@ test("MCP resources and prompts use the negotiated client session", async () => 
     toolTimeoutMs: 5_000,
     maxOutputChars: 5_000,
     enabled: true,
+    allowedHosts: [],
     allowedTools: [],
   });
   connections.push(connection);
@@ -155,7 +158,8 @@ test("configured MCP credentials fail closed when unavailable", async () => {
     id: "fixture-auth",
     transport: "streamable-http",
     args: [],
-    url: "http://127.0.0.1:1/mcp",
+    url: "https://127.0.0.1:1/mcp",
+    allowedHosts: ["127.0.0.1"],
     authEnvironmentVariable: "CHIKU_TEST_MISSING_TOKEN",
     environment: {},
     connectTimeoutMs: 1_000,
@@ -167,4 +171,21 @@ test("configured MCP credentials fail closed when unavailable", async () => {
   await expect(connection.connect()).rejects.toThrow(
     "CHIKU_TEST_MISSING_TOKEN is not configured",
   );
+});
+
+test("MCP HTTP transport requires an explicit HTTPS host allowlist", async () => {
+  const connection = new McpClientConnection({
+    id: "fixture-ssrf",
+    transport: "streamable-http",
+    url: "http://127.0.0.1:1/mcp",
+    allowedHosts: ["127.0.0.1"],
+    environment: {},
+    connectTimeoutMs: 1_000,
+    toolTimeoutMs: 1_000,
+    maxOutputChars: 1_000,
+    enabled: true,
+    allowedTools: [],
+    args: [],
+  });
+  await expect(connection.connect()).rejects.toThrow("requires HTTPS");
 });
